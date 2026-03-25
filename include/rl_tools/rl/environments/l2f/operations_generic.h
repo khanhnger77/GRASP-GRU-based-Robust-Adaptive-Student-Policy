@@ -175,7 +175,7 @@ namespace rl_tools{
         return rl::environments::l2f::parameters::reward_functions::reward(device, env, parameters, parameters.mdp.reward, state, action, next_state, rng);
     }
     template<typename DEVICE, typename SPEC, typename PARAMETERS, typename STATE, typename ACTION_SPEC, typename RNG>
-    RL_TOOLS_FUNCTION_PLACEMENT void log_reward(DEVICE& device, const rl::environments::Multirotor<SPEC>& env, PARAMETERS& parameters, const STATE& state, const Matrix<ACTION_SPEC>& action, const STATE& next_state, RNG& rng, typename DEVICE::index_t cadence = 1) {
+    RL_TOOLS_FUNCTION_PLACEMENT void log_reward(DEVICE& device, rl::environments::Multirotor<SPEC>& env, PARAMETERS& parameters, const STATE& state, Matrix<ACTION_SPEC>& action, STATE& next_state, RNG& rng, typename DEVICE::index_t cadence = 1) {
         rl::environments::l2f::parameters::reward_functions::log_reward(device, env, parameters, parameters.mdp.reward, state, action, next_state, rng, cadence);
     }
 

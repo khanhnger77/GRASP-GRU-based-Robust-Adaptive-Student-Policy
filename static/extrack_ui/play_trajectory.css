@@ -1,35 +1,200 @@
+/* ── MATLAB Classic Style ─────────────────────────────────────────────────── */
+
+/* ── Base layout ─────────────────────────────────────────────────────────── */
 .trajectory-player-container {
     display: flex;
     flex-direction: column;
-    margin: 10px;
+    gap: 6px;
+    box-sizing: border-box;
+}
+
+.trajectory-player-left-col {
+    display: flex;
+    flex-direction: column;
+    flex: 0 0 auto;
+    gap: 6px;
 }
 
 .trajectory-player-canvas-container {
-    flex-grow: 1;
-    display: flex;
-    align-items: center;
-    position: relative;
-}
-
-.trajectory-player-controls-container{
-    text-align: center;
-}
-.trajectory-player-controls-container > * {
-    margin: 5px;
-}
-.trajectory-player-canvas-container{
-    flex-grow: 1;
-    /*display: flex;*/
-    /*flex-direction: column;*/
-    border-radius: 7.5px;
-    overflow:hidden;
-    /*border-style: solid;*/
-    /*border-width: 2px;*/
-    /*border-color: #67b1ae8c;*/
-    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
+    overflow: hidden;
     width: 100%;
     aspect-ratio: 1 / 1;
     max-width: 100%;
     box-sizing: border-box;
-    margin-bottom: 20px;
+    background: #ffffff;
+    border: 2px solid #666666;
+}
+
+.trajectory-player-controls-container {
+    text-align: center;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+    padding: 4px 0;
+}
+
+.trajectory-player-episode-info {
+    font-size: 11px;
+    color: #333333;
+    font-family: 'Helvetica Neue', Arial, sans-serif;
+    width: 100%;
+    text-align: center;
+}
+
+/* MATLAB-style buttons: raised, gray */
+.trajectory-player-controls-container button {
+    background: #e8e8e8;
+    color: #000000;
+    border: 1px solid #888888;
+    border-right-color: #555;
+    border-bottom-color: #555;
+    padding: 4px 14px;
+    font-size: 11px;
+    font-family: 'Helvetica Neue', Arial, sans-serif;
+    cursor: pointer;
+}
+.trajectory-player-controls-container button:hover {
+    background: #d4d4d4;
+}
+.trajectory-player-controls-container button:active {
+    border-color: #555 #888 #888 #555;
+}
+
+/* ── Telemetry two-column layout ─────────────────────────────────────────── */
+.trajectory-player-container.telem-active {
+    flex-direction: row;
+    align-items: flex-start;
+    background: #f0f0f0;
+    color: #000000;
+    font-family: 'Helvetica Neue', Arial, sans-serif;
+    padding: 10px;
+    border: 1px solid #aaaaaa;
+    width: 100%;
+    gap: 10px;
+}
+
+.trajectory-player-container.telem-active .trajectory-player-canvas-container {
+    margin-bottom: 0;
+}
+
+.trajectory-player-container.telem-active .trajectory-player-left-col {
+    flex: 0 0 min(52vw, 520px);
+    max-width: min(52vw, 520px);
+}
+
+/* ── Telemetry panel ─────────────────────────────────────────────────────── */
+.telem-panel {
+    flex: 1;
+    min-width: 260px;
+    max-width: 480px;
+    background: #f0f0f0;
+    border: 1px solid #aaaaaa;
+    padding: 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    overflow-y: auto;
+    max-height: 98vh;
+    box-sizing: border-box;
+}
+
+/* Title bar like MATLAB Figure window */
+.telem-header {
+    background: #d9d9d9;
+    border: 1px solid #888888;
+    color: #000000;
+    font-family: 'Helvetica Neue', Arial, sans-serif;
+    font-size: 11px;
+    font-weight: bold;
+    padding: 4px 8px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    letter-spacing: 0.5px;
+}
+
+.telem-uav-badge {
+    background: #0072BD;
+    color: #ffffff;
+    font-size: 10px;
+    font-weight: bold;
+    padding: 1px 7px;
+    font-family: 'Helvetica Neue', Arial, sans-serif;
+    letter-spacing: 0.3px;
+    cursor: default;
+    flex-shrink: 0;
+}
+
+/* Green LED indicator */
+.telem-dot {
+    width: 8px;
+    height: 8px;
+    background: #00aa00;
+    border-radius: 50%;
+    border: 1px solid #007700;
+    display: inline-block;
+    flex-shrink: 0;
+}
+
+/* State cards grid */
+.telem-cards {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 5px;
+}
+
+.telem-card {
+    background: #ffffff;
+    border: 1px solid #aaaaaa;
+    padding: 6px 8px;
+}
+
+.telem-card-label {
+    font-size: 9px;
+    font-weight: bold;
+    color: #333333;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 4px;
+    padding-bottom: 3px;
+    border-bottom: 1px solid #cccccc;
+    font-family: 'Helvetica Neue', Arial, sans-serif;
+}
+
+.telem-card-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    margin: 2px 0;
+}
+
+.telem-field-name {
+    font-size: 10px;
+    color: #555555;
+    font-family: 'Helvetica Neue', Arial, sans-serif;
+}
+
+.telem-field-val {
+    font-size: 10px;
+    color: #000000;
+    font-family: 'Courier New', monospace;
+    font-weight: bold;
+}
+
+/* Charts section */
+.telem-charts {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    flex: 1;
+}
+
+.telem-chart-wrapper {
+    position: relative;
+    background: #ffffff;
+    border: 1px solid #aaaaaa;
+    overflow: hidden;
+    box-sizing: border-box;
 }

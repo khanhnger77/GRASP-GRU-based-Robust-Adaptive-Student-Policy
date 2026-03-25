@@ -15,7 +15,7 @@ namespace builder{
 
         using BASE_ENV = rl_tools::rl::environments::Multirotor<Specification<T, TI>>;
 
-        static constexpr auto MODEL = parameters::dynamics::REGISTRY::crazyflie;
+        static constexpr auto MODEL = parameters::dynamics::REGISTRY::x500_real;
         constexpr static auto MODEL_NAME = rl_tools::rl::environments::l2f::parameters::dynamics::registry_name<MODEL>;
 
         using REWARD_FUNCTION = parameters::reward_functions::Squared<T>;
@@ -79,7 +79,7 @@ namespace builder{
             static constexpr auto PARAMETER_VALUES = nominal_parameters;
             static constexpr TI N_DYNAMICS_VALUES = 1;
             static constexpr typename PARAMETERS_TYPE::Dynamics DYNAMICS_VALUES[N_DYNAMICS_VALUES] = {
-                rl_tools::rl::environments::l2f::parameters::dynamics::registry<parameters::dynamics::REGISTRY::crazyflie, PARAMETERS_SPEC>
+                rl_tools::rl::environments::l2f::parameters::dynamics::registry<parameters::dynamics::REGISTRY::x500_real, PARAMETERS_SPEC>
             };
             static constexpr T STATE_LIMIT_POSITION = 100000;
             static constexpr T STATE_LIMIT_VELOCITY = 100000;

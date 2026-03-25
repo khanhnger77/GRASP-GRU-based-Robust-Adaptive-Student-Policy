@@ -163,7 +163,7 @@ int main(int argc, char** argv){
     // checkpoint_path.experiment = "2025-04-04_17-00-11";
     // checkpoint_path.experiment = "2025-04-07_23-12-07";
     // checkpoint_path.experiment = "2025-04-08_23-23-52";
-    checkpoint_path.experiment = "2025-04-16_20-10-58";
+    checkpoint_path.experiment = "2026-03-24_15-26-31";
     checkpoint_path.name = "foundation-policy-pre-training";
 
     std::filesystem::path dynamics_parameters_path = "./src/foundation_policy/dynamics_parameters_" + checkpoint_path.experiment + "/";
@@ -196,7 +196,7 @@ int main(int argc, char** argv){
         auto cpp_copy = checkpoint_path;
         cpp_copy.attributes["dynamics-id"] = checkpoint_info_split[0]; // take from the end because we order by performance and the best are at the end
         cpp_copy.step = checkpoint_info_split[1];
-        rlt::find_latest_run(device, "1k-experiments", cpp_copy);
+        rlt::find_latest_run(device, "experiments", cpp_copy);
         auto actor_file = HighFive::File(cpp_copy.checkpoint_path.string(), HighFive::File::ReadOnly);
         rlt::load(device, actor_teacher[teacher_i], actor_file.getGroup("actor"));
 
@@ -350,10 +350,11 @@ int main(int argc, char** argv){
         TI epoch_loss_count = 0;
         TI epoch_episode_index = 0;
         std::cout << "Epoch: " << epoch_i << " has " << N << " samples and " << N_EPISODE << " episodes" << std::endl;
+        TI N_BATCHES_TARGET = std::max((TI)1, N_EPISODE / BATCH_SIZE);
         TI batch_i = 0;
         TI epoch_episode = rlt::get(device, epoch_indices, epoch_episode_index);
         TI current_sample = rlt::get(device, dataset_episode_start_indices, epoch_episode);
-        while(true){
+        while(batch_i < N_BATCHES_TARGET){
             for (TI sample_i=0; sample_i<BATCH_SIZE; sample_i++){
                 // TI current_epoch_index = batch_i * BATCH_SIZE + sample_i;
                 bool reset = false;
@@ -374,8 +375,7 @@ int main(int argc, char** argv){
                     }
                     else{
                         if(++epoch_episode_index >= N_EPISODE){
-                            std::cerr << "Epoch episode index exceeded after " << batch_i << " batches" << std::endl;
-                            goto end_of_epoch;
+                            epoch_episode_index = 0;
                         }
                         current_sample = rlt::get(device, dataset_episode_start_indices, rlt::get(device, epoch_indices, epoch_episode_index));
                     }
@@ -423,12 +423,12 @@ int main(int argc, char** argv){
             RESULT_EVAL result_eval;
             DATA_EVAL data_eval;
             rlt::evaluate(device, env_eval, ui, evaluation_actor, result_eval, data_eval, rng, mode);
-            rlt::add_scalar(device, device.logger, "crazyflie/return/mean", result_eval.returns_mean);
-            rlt::add_scalar(device, device.logger, "crazyflie/return/std", result_eval.returns_std);
-            rlt::add_scalar(device, device.logger, "crazyflie/episode_length/mean", result_eval.episode_length_mean);
-            rlt::add_scalar(device, device.logger, "crazyflie/episode_length/std", result_eval.episode_length_std);
-            rlt::add_scalar(device, device.logger, "crazyflie/share_terminated", result_eval.share_terminated);
-            rlt::log(device, device.logger, "Crazyflie: Mean return: ", result_eval.returns_mean, " Mean episode length: ", result_eval.episode_length_mean, " Share terminated: ", result_eval.share_terminated * 100, "%");
+            rlt::add_scalar(device, device.logger, "x500/return/mean", result_eval.returns_mean);
+            rlt::add_scalar(device, device.logger, "x500/return/std", result_eval.returns_std);
+            rlt::add_scalar(device, device.logger, "x500/episode_length/mean", result_eval.episode_length_mean);
+            rlt::add_scalar(device, device.logger, "x500/episode_length/std", result_eval.episode_length_std);
+            rlt::add_scalar(device, device.logger, "x500/share_terminated", result_eval.share_terminated);
+            rlt::log(device, device.logger, "X500: Mean return: ", result_eval.returns_mean, " Mean episode length: ", result_eval.episode_length_mean, " Share terminated: ", result_eval.share_terminated * 100, "%");
 
             rlt::free(device, evaluation_actor);
             rlt::free(device, eval_buffer);

@@ -66,11 +66,36 @@ export class ShowRun{
             description.appendChild(description_button)
         }
 
+        if(run.reward_params){
+            description.appendChild(document.createElement("br"))
+            const reward_label = document.createElement("b")
+            reward_label.innerText = "Reward: "
+            description.appendChild(reward_label)
+            const reward_button = document.createElement("button")
+            reward_button.classList.add("info-button")
+            reward_button.innerText = "i"
+            reward_button.onclick = () => {
+                fetch(run.reward_params).then(r => r.json()).then(p => {
+                    const lines = Object.entries(p).map(([k, v]) => `  ${k.padEnd(26)}: ${v}`)
+                    alert("Reward Parameters:\n" + lines.join("\n"))
+                })
+            }
+            description.appendChild(reward_button)
+            const reward_inline = document.createElement("span")
+            reward_inline.style.fontFamily = "monospace"
+            reward_inline.style.fontSize = "0.85em"
+            reward_inline.style.marginLeft = "6px"
+            fetch(run.reward_params).then(r => r.json()).then(p => {
+                reward_inline.innerText = `pos=${p.position} ori=${p.orientation} vel=${p.linear_velocity} d_act=${p.d_action} intg=${p.position_error_integral}`
+            })
+            description.appendChild(reward_inline)
+        }
+
         container.appendChild(description)
 
         const trajectory_player_container = document.createElement("div")
-        // trajectory_player_container.style.height = "500px";
-        const trajectory_player = new TrajectoryPlayer(run.ui_jsm, size);
+        trajectory_player_container.style.width = "100%";
+        const trajectory_player = new TrajectoryPlayer(run.ui_jsm, size, { telemetry: true });
         trajectory_player_container.appendChild(trajectory_player.getCanvas());
         container.appendChild(trajectory_player_container)
         if(run.steps[step].trajectories_compressed){

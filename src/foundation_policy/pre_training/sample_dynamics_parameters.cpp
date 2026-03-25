@@ -21,7 +21,7 @@ int main(int argc, char** argv){
     RNG rng;
     rlt::malloc(device, rng);
     TI seed = 0;
-    TI N = 1000;
+    TI N = 5;
     rlt::init(device, rng, seed);
     ENVIRONMENT env;
     ENVIRONMENT::Parameters params;
@@ -46,21 +46,21 @@ int main(int argc, char** argv){
         // parameters.mdp.init.max_position = 0.5;
 
         parameters.domain_randomization = {
-            1.5, // thrust_to_weight_min;
-            5.0, // thrust_to_weight_max;
-            40, // torque_to_inertia_min;
-            1200, // torque_to_inertia_max;
-            0.02, // mass_min;
-            5.00, // mass_max;
-            0.1, // mass_size_deviation;
-            0.03, // motor_time_constant_rising_min;
-            0.10, // motor_time_constant_rising_max;
-            0.03, // motor_time_constant_falling_min;
-            0.30, // motor_time_constant_falling_max;
-            0.005, // rotor_torque_constant_min;
-            0.05, // rotor_torque_constant_max;
-            0.0, // orientation_offset_angle_max;
-            0.3  // disturbance_force_max;
+            2.6, // thrust_to_weight_min; (x500 ~3.25)
+            3.9, // thrust_to_weight_max;
+            17.0, // torque_to_inertia_min; (x500 ~23)
+            32.0, // torque_to_inertia_max;
+            1.60, // mass_min; (x500 2.0 kg ±20%)
+            2.40, // mass_max;
+            0.06, // mass_size_deviation; (±6% size)
+            0.040, // motor_time_constant_rising_min; (0.054 ±~25%)
+            0.068, // motor_time_constant_rising_max;
+            0.040, // motor_time_constant_falling_min;
+            0.068, // motor_time_constant_falling_max;
+            0.081, // rotor_torque_constant_min; (0.108 ±~25%)
+            0.135, // rotor_torque_constant_max;
+            0.12, // orientation_offset_angle_max; (~6.9 deg)
+            0.16  // disturbance_force_max;
         };
     };
     overwrite(env.parameters);
@@ -93,12 +93,12 @@ int main(int argc, char** argv){
         rlt::permute_rotors(device, env, copy, 0, 3, 1, 2);
         return copy;
     };
-    registry.emplace_back("crazyflie", rlt::rl::environments::l2f::parameters::dynamics::crazyflie<ENVIRONMENT::SPEC::T, ENVIRONMENT::SPEC::TI>);
+    // registry.emplace_back("crazyflie", rlt::rl::environments::l2f::parameters::dynamics::crazyflie<ENVIRONMENT::SPEC::T, ENVIRONMENT::SPEC::TI>);
     registry.emplace_back("x500", permute_rotors_px4_to_cf(rlt::rl::environments::l2f::parameters::dynamics::x500::real<ENVIRONMENT::SPEC::T, ENVIRONMENT::SPEC::TI>));
-    registry.emplace_back("mrs", permute_rotors_px4_to_cf(rlt::rl::environments::l2f::parameters::dynamics::mrs<ENVIRONMENT::SPEC::T, ENVIRONMENT::SPEC::TI>));
-    registry.emplace_back("fs", permute_rotors_px4_to_cf(rlt::rl::environments::l2f::parameters::dynamics::fs::base<ENVIRONMENT::SPEC::T, ENVIRONMENT::SPEC::TI>));
-    registry.emplace_back("race", permute_rotors_px4_to_cf(rlt::rl::environments::l2f::parameters::dynamics::race<ENVIRONMENT::SPEC::T, ENVIRONMENT::SPEC::TI>));
-    registry.emplace_back("flightmare", permute_rotors_px4_to_cf(rlt::rl::environments::l2f::parameters::dynamics::flightmare<ENVIRONMENT::SPEC::T, ENVIRONMENT::SPEC::TI>));
+    // registry.emplace_back("mrs", permute_rotors_px4_to_cf(rlt::rl::environments::l2f::parameters::dynamics::mrs<ENVIRONMENT::SPEC::T, ENVIRONMENT::SPEC::TI>));
+    // registry.emplace_back("fs", permute_rotors_px4_to_cf(rlt::rl::environments::l2f::parameters::dynamics::fs::base<ENVIRONMENT::SPEC::T, ENVIRONMENT::SPEC::TI>));
+    // registry.emplace_back("race", permute_rotors_px4_to_cf(rlt::rl::environments::l2f::parameters::dynamics::race<ENVIRONMENT::SPEC::T, ENVIRONMENT::SPEC::TI>));
+    // registry.emplace_back("flightmare", permute_rotors_px4_to_cf(rlt::rl::environments::l2f::parameters::dynamics::flightmare<ENVIRONMENT::SPEC::T, ENVIRONMENT::SPEC::TI>));
 
     rlt::initial_parameters(device, env, params);
     overwrite(params);
