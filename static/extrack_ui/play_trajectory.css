@@ -198,3 +198,77 @@
     overflow: hidden;
     box-sizing: border-box;
 }
+
+/* ── Flight path panel ───────────────────────────────────────────────────── */
+
+/* Mini single-drone replay at the top of the flight path panel */
+.mini-drone-wrapper {
+    width: 100%;
+    height: 210px;
+    background: #000000;
+    border: 1px solid #aaaaaa;
+    overflow: hidden;
+    position: relative;
+    box-sizing: border-box;
+    flex-shrink: 0;
+}
+.mini-drone-wrapper canvas {
+    display: block;
+    width: 100% !important;
+    height: 100% !important;
+}
+
+/* 3D viewport inside the flight path panel */
+.traj-3d-wrapper {
+    position: relative;
+    width: 100%;
+    height: 300px;
+    background: #ffffff;
+    border: 1px solid #aaaaaa;
+    overflow: hidden;
+    box-sizing: border-box;
+    cursor: grab;
+}
+.traj-3d-wrapper:active { cursor: grabbing; }
+.traj-3d-wrapper canvas {
+    display: block;
+    width: 100% !important;
+    height: 300px !important;
+}
+
+.traj-panel {
+    flex: 1;
+    min-width: 300px;
+    max-width: 440px;
+    background: #f0f0f0;
+    border: 1px solid #aaaaaa;
+    padding: 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    overflow-y: auto;
+    max-height: 98vh;
+    box-sizing: border-box;
+}
+
+/* Activate row layout when path panel is visible (no telemetry) */
+.trajectory-player-container.traj-active:not(.telem-active) {
+    flex-direction: row;
+    align-items: flex-start;
+    background: #f0f0f0;
+    color: #000000;
+    font-family: 'Helvetica Neue', Arial, sans-serif;
+    padding: 10px;
+    border: 1px solid #aaaaaa;
+    width: 100%;
+    gap: 10px;
+}
+
+.trajectory-player-container.traj-active:not(.telem-active) .trajectory-player-canvas-container {
+    margin-bottom: 0;
+}
+
+.trajectory-player-container.traj-active:not(.telem-active) .trajectory-player-left-col {
+    flex: 0 0 min(52vw, 520px);
+    max-width: min(52vw, 520px);
+}
