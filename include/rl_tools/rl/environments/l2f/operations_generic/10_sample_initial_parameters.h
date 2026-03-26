@@ -204,6 +204,17 @@ namespace rl_tools{
             sample_initial_parameters(device, env, static_cast<typename PARAMETER_SPEC::NEXT_COMPONENT&>(parameters), rng);
             parameters.trajectory = env.parameters.trajectory;
         }
+        template<typename DEVICE, typename SPEC, typename PARAMETER_SPEC, typename RNG>
+        static void _sample_initial_parameters(DEVICE& device, Multirotor<SPEC>& env, ParametersPayload<PARAMETER_SPEC>& parameters, RNG& rng){
+            using T = typename SPEC::T;
+            using TI = typename DEVICE::index_t;
+            sample_initial_parameters(device, env, static_cast<typename PARAMETER_SPEC::NEXT_COMPONENT&>(parameters), rng);
+            parameters.payload = env.parameters.payload;
+            // Randomize drop timing so policy learns to react to disturbance, not memorize schedule
+            TI min_drop = (TI)(env.parameters.payload.drop_step / 2);
+            TI max_drop = (TI)(env.parameters.payload.drop_step * 2);
+            parameters.payload.drop_step = (TI)random::uniform_real_distribution(device.random, (T)min_drop, (T)max_drop, rng);
+        }
     }
 }
 RL_TOOLS_NAMESPACE_WRAPPER_END

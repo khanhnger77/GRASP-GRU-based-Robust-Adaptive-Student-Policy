@@ -195,6 +195,21 @@ namespace rl_tools{
             }
         }
         template<typename DEVICE, typename SPEC, typename PARAMETERS, typename STATE_SPEC, typename RNG>
+        RL_TOOLS_FUNCTION_PLACEMENT static void _sample_initial_state(DEVICE& device, Multirotor<SPEC>& env, PARAMETERS& parameters, StatePayload<STATE_SPEC>& state, RNG& rng){
+            typename DEVICE::SPEC::RANDOM random_dev;
+            using T = typename SPEC::T;
+            using STATE = StatePayload<STATE_SPEC>;
+            sample_initial_state(device, env, parameters, static_cast<typename STATE::NEXT_COMPONENT&>(state), rng);
+            // Small random perturbation to theta so the pendulum starts near vertical
+            T max_theta = (T)0.1; // ~6 degrees
+            state.angle[0] = random::uniform_real_distribution(random_dev, (T)0, max_theta, rng);
+            state.angle[1] = random::uniform_real_distribution(random_dev, (T)0, (T)(2*3.14159265358979323846), rng);
+            state.angular_vel[0] = 0;
+            state.angular_vel[1] = 0;
+            state.attached = true;
+            state.episode_step = 0;
+        }
+        template<typename DEVICE, typename SPEC, typename PARAMETERS, typename STATE_SPEC, typename RNG>
         RL_TOOLS_FUNCTION_PLACEMENT static void _sample_initial_state(DEVICE& device, Multirotor<SPEC>& env, PARAMETERS& parameters, StateTrajectory<STATE_SPEC>& state, RNG& rng){
             using MULTIROTOR = Multirotor<SPEC>;
             using TI = typename DEVICE::index_t;

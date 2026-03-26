@@ -206,6 +206,22 @@ namespace rl_tools::rl::environments::l2f{
         using Trajectory = parameters::Trajectory<typename SPEC::T, typename SPEC::TI>;
         Trajectory trajectory;
     };
+    template <typename T_T, typename T_TI, typename T_NEXT_COMPONENT>
+    struct ParametersPayloadSpecification{
+        using T = T_T;
+        using TI = T_TI;
+        using NEXT_COMPONENT = T_NEXT_COMPONENT;
+    };
+    template <typename SPEC>
+    struct ParametersPayload: SPEC::NEXT_COMPONENT{
+        static constexpr typename SPEC::TI N = SPEC::NEXT_COMPONENT::N;
+        struct Payload{
+            typename SPEC::T rope_length;   // length of the rope [m]
+            typename SPEC::T payload_mass;  // mass of the payload [kg]
+            typename SPEC::TI drop_step;    // episode step at which payload is dropped (0 = never drop)
+        };
+        Payload payload;
+    };
 
 
 //    enum class LatentStateType{
@@ -473,6 +489,21 @@ namespace rl_tools::rl::environments::l2f{
             static constexpr TI CURRENT_DIM = 6;
             static constexpr TI DIM = NEXT_COMPONENT::DIM + CURRENT_DIM;
         };
+        // ObservationPayload: theta, phi, dtheta/dt, dphi/dt, attached (5 dims) — privileged only
+        template <typename T_T, typename T_TI, typename T_NEXT_COMPONENT = LastComponent<T_TI>>
+        struct PayloadSpecification {
+            using T = T_T;
+            using TI = T_TI;
+            using NEXT_COMPONENT = T_NEXT_COMPONENT;
+        };
+        template <typename SPEC>
+        struct Payload{
+            using T = typename SPEC::T;
+            using TI = typename SPEC::TI;
+            using NEXT_COMPONENT = typename SPEC::NEXT_COMPONENT;
+            static constexpr TI CURRENT_DIM = 5; // theta, phi, dtheta, dphi, attached
+            static constexpr TI DIM = NEXT_COMPONENT::DIM + CURRENT_DIM;
+        };
         template <typename T_T, typename T_TI, T_TI T_N, typename T_NEXT_COMPONENT = LastComponent<T_TI>>
         struct ParametersMotorPositionSpecification {
             using T = T_T;
@@ -722,6 +753,22 @@ namespace rl_tools::rl::environments::l2f{
             };
         };
         Trajectory trajectory;
+    };
+    // StatePayload: spherical pendulum suspended below the quadrotor.
+    // angle[0] = theta: polar angle from the downward vertical (0 = hanging straight down)
+    // angle[1] = phi:   azimuthal angle in the horizontal plane
+    template <typename T_SPEC>
+    struct StatePayload: T_SPEC::NEXT_COMPONENT{
+        using SPEC = T_SPEC;
+        using T = typename SPEC::T;
+        using TI = typename SPEC::TI;
+        using NEXT_COMPONENT = typename SPEC::NEXT_COMPONENT;
+        static constexpr bool REQUIRES_INTEGRATION = true;
+        static constexpr TI DIM = 4 + NEXT_COMPONENT::DIM; // theta, phi, dtheta/dt, dphi/dt
+        T angle[2];       // [theta, phi]
+        T angular_vel[2]; // [dtheta/dt, dphi/dt]
+        bool attached;    // true = payload attached; false = payload dropped
+        TI episode_step;  // counts steps since episode start (not integrated)
     };
 
 

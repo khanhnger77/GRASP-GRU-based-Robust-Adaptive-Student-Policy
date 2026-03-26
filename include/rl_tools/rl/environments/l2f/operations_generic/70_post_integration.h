@@ -168,6 +168,25 @@ namespace rl_tools::rl::environments::l2f{
         }
     }
 
+    template<typename DEVICE, typename SPEC, typename PARAMETERS, typename STATE_SPEC, typename ACTION_SPEC, typename RNG>
+    RL_TOOLS_FUNCTION_PLACEMENT void post_integration(DEVICE& device, const Multirotor<SPEC>& env, PARAMETERS& parameters, const StatePayload<STATE_SPEC>& state, const Matrix<ACTION_SPEC>& action, StatePayload<STATE_SPEC>& next_state, RNG& rng) {
+        using T = typename STATE_SPEC::T;
+        using TI = typename DEVICE::index_t;
+        post_integration(device, env, parameters, static_cast<const typename STATE_SPEC::NEXT_COMPONENT&>(state), action, static_cast<typename STATE_SPEC::NEXT_COMPONENT&>(next_state), rng);
+        next_state.episode_step = state.episode_step + 1;
+        // Detach payload once drop_step is reached
+        if(state.attached && next_state.episode_step >= parameters.payload.drop_step){
+            next_state.attached = false;
+            next_state.angle[0] = 0;
+            next_state.angle[1] = 0;
+            next_state.angular_vel[0] = 0;
+            next_state.angular_vel[1] = 0;
+        } else {
+            next_state.attached = state.attached;
+            // Clamp theta to [0, pi] to keep it in valid polar range
+            next_state.angle[0] = math::clamp(device.math, next_state.angle[0], (T)0, (T)3.14159265358979323846);
+        }
+    }
 }
 RL_TOOLS_NAMESPACE_WRAPPER_END
 #endif

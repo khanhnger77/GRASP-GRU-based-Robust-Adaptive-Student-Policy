@@ -114,6 +114,85 @@ namespace rl_tools::rl::environments::l2f{
         using STATE = StateRotorsHistory<STATE_SPEC>;
         multirotor_dynamics(device, params, static_cast<const typename STATE::NEXT_COMPONENT&>(state), action, static_cast<typename STATE::NEXT_COMPONENT&>(state_change));
     }
+    // Spherical pendulum on a moving pivot (quadrotor).
+    // State: angle[0]=theta (polar from downward vertical), angle[1]=phi (azimuthal)
+    // Unit vectors (z-up):
+    //   n   = [sin(t)*cos(p), sin(t)*sin(p), -cos(t)]   (drone->payload)
+    //   e_t = [cos(t)*cos(p), cos(t)*sin(p),  sin(t)]   (d(n)/d(theta), normalised)
+    //   e_p = [-sin(p),        cos(p),          0  ]     (d(n)/d(phi)/sin(theta), normalised)
+    // EOM in inertial frame with pivot acceleration a_d:
+    //   theta_ddot = dphi^2*sin(t)*cos(t) + (g.e_t - a_d.e_t) / L
+    //   phi_ddot   = (-2*dtheta*dphi*cos(t) + (g.e_p - a_d.e_p)) / (L*sin(t))
+    // String tension (reaction on drone = tension * n):
+    //   tension = m_p * (+g.n - a_d.n + L*(dtheta^2 + dphi^2*sin(t)^2))  [clamped >= 0]
+    template<typename DEVICE, typename PARAMETERS, typename STATE_SPEC, typename T>
+    RL_TOOLS_FUNCTION_PLACEMENT void multirotor_dynamics(DEVICE& device, const PARAMETERS& params, const StatePayload<STATE_SPEC>& state, const T* action, StatePayload<STATE_SPEC>& state_change){
+        // 1. Base quadrotor dynamics (fills drone states in state_change)
+        multirotor_dynamics(device, params, static_cast<const typename STATE_SPEC::NEXT_COMPONENT&>(state), action, static_cast<typename STATE_SPEC::NEXT_COMPONENT&>(state_change));
+
+        if(!state.attached){
+            state_change.angle[0]       = (T)0;
+            state_change.angle[1]       = (T)0;
+            state_change.angular_vel[0] = (T)0;
+            state_change.angular_vel[1] = (T)0;
+            return;
+        }
+
+        T theta  = state.angle[0];
+        T phi    = state.angle[1];
+        T dtheta = state.angular_vel[0];
+        T dphi   = state.angular_vel[1];
+        T L      = params.payload.rope_length;
+        T m_p    = params.payload.payload_mass;
+        T m_d    = params.dynamics.mass;
+
+        T sin_t = math::sin(device.math, theta);
+        T cos_t = math::cos(device.math, theta);
+        T sin_p = math::sin(device.math, phi);
+        T cos_p = math::cos(device.math, phi);
+
+        // Unit vectors (flat declarations for CUDA compatibility)
+        T n0 = sin_t*cos_p;  T n1 = sin_t*sin_p;  T n2 = -cos_t;
+        T et0 = cos_t*cos_p; T et1 = cos_t*sin_p; T et2 = sin_t;
+        T ep0 = -sin_p;      T ep1 = cos_p;        T ep2 = (T)0;
+
+        // Drone acceleration from base dynamics (before payload reaction)
+        T ad0 = state_change.linear_velocity[0];
+        T ad1 = state_change.linear_velocity[1];
+        T ad2 = state_change.linear_velocity[2];
+        T g0  = params.dynamics.gravity[0];
+        T g1  = params.dynamics.gravity[1];
+        T g2  = params.dynamics.gravity[2];
+
+        // Dot products
+        T g_dot_et  = g0*et0  + g1*et1  + g2*et2;
+        T g_dot_ep  = g0*ep0  + g1*ep1  + g2*ep2;
+        T g_dot_n   = g0*n0   + g1*n1   + g2*n2;
+        T ad_dot_et = ad0*et0 + ad1*et1 + ad2*et2;
+        T ad_dot_ep = ad0*ep0 + ad1*ep1 + ad2*ep2;
+        T ad_dot_n  = ad0*n0  + ad1*n1  + ad2*n2;
+
+        // Pendulum kinematics (state_change.angle = angular velocity)
+        state_change.angle[0] = dtheta;
+        state_change.angle[1] = dphi;
+
+        // Pendulum angular accelerations
+        T theta_ddot = dphi*dphi * sin_t*cos_t + (g_dot_et - ad_dot_et) / L;
+        T sin_t_safe = math::clamp(device.math, sin_t, (T)1e-4, (T)1);
+        T phi_ddot   = (-((T)2)*dtheta*dphi*cos_t + (g_dot_ep - ad_dot_ep)) / (L * sin_t_safe);
+
+        state_change.angular_vel[0] = theta_ddot;
+        state_change.angular_vel[1] = phi_ddot;
+
+        // String tension, clamped >= 0 (slack string = no force)
+        T tension = m_p * (g_dot_n - ad_dot_n + L * (dtheta*dtheta + dphi*dphi * sin_t*sin_t));
+        tension = math::clamp(device.math, tension, (T)0, (T)1e6);
+
+        // Reaction force on drone (Newton 3rd law)
+        state_change.linear_velocity[0] += tension * n0 / m_d;
+        state_change.linear_velocity[1] += tension * n1 / m_d;
+        state_change.linear_velocity[2] += tension * n2 / m_d;
+    }
     template<typename DEVICE, typename T, typename PARAMETERS, typename STATE>
     RL_TOOLS_FUNCTION_PLACEMENT void multirotor_dynamics_dispatch(DEVICE& device, const PARAMETERS& params, const STATE& state, const T* action, STATE& state_change) {
         // this dispatch function is required to pass the multirotor dynamics function to the integrator (euler, rk4) as a template parameter (so that it can be inlined/optimized at compile time)

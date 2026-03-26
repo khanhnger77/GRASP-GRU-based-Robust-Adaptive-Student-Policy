@@ -409,6 +409,18 @@ namespace rl_tools{
         json_string += (top_level ? "}" : "");
         return json_string;
     }
+    template <typename DEVICE, typename SPEC, typename PARAM_SPEC>
+    std::string json(DEVICE& device, const rl::environments::Multirotor<SPEC>& env, const rl::environments::l2f::ParametersPayload<PARAM_SPEC>& parameters, bool top_level=true){
+        std::string json_string = top_level ? "{" : "";
+        json_string += json(device, env, static_cast<const typename PARAM_SPEC::NEXT_COMPONENT&>(parameters), false);
+        json_string += ", \"payload\": {";
+        json_string += "\"rope_length\": " + std::to_string(parameters.payload.rope_length) + ", ";
+        json_string += "\"payload_mass\": " + std::to_string(parameters.payload.payload_mass) + ", ";
+        json_string += "\"drop_step\": " + std::to_string(parameters.payload.drop_step);
+        json_string += "}";
+        json_string += (top_level ? "}" : "");
+        return json_string;
+    }
 
     template <typename DEVICE, typename SPEC, typename PARAMETERS, typename STATE_SPEC>
     std::string json(DEVICE& device, const rl::environments::Multirotor<SPEC>& env, const PARAMETERS& parameters, const rl::environments::l2f::StateBase<STATE_SPEC>& state, bool top_level=true){
@@ -558,6 +570,19 @@ namespace rl_tools{
                 json_string += "\"NONE\"";
                 break;
         }
+        json_string += "}";
+        json_string += top_level ? "}" : "";
+        return json_string;
+    }
+    template <typename DEVICE, typename SPEC, typename PARAMETERS, typename STATE_SPEC>
+    std::string json(DEVICE& device, const rl::environments::Multirotor<SPEC>& env, const PARAMETERS& parameters, const rl::environments::l2f::StatePayload<STATE_SPEC>& state, bool top_level=true){
+        std::string json_string = top_level ? "{" : "";
+        json_string += json(device, env, parameters, static_cast<const typename STATE_SPEC::NEXT_COMPONENT&>(state), false) + ", ";
+        json_string += "\"payload\": {";
+        json_string += "\"angle\": [" + std::to_string(state.angle[0]) + ", " + std::to_string(state.angle[1]) + "], ";
+        json_string += "\"angular_vel\": [" + std::to_string(state.angular_vel[0]) + ", " + std::to_string(state.angular_vel[1]) + "], ";
+        json_string += "\"attached\": " + std::string(state.attached ? "true" : "false") + ", ";
+        json_string += "\"episode_step\": " + std::to_string(state.episode_step);
         json_string += "}";
         json_string += top_level ? "}" : "";
         return json_string;
@@ -719,6 +744,13 @@ namespace rl_tools{
         from_json(device, env, json_object, static_cast<typename PARAM_SPEC::NEXT_COMPONENT&>(parameters));
         from_json(device, env, json_object["trajectory"], parameters.trajectory);
     }
+    template <typename DEVICE, typename SPEC, typename PARAM_SPEC>
+    void from_json(DEVICE& device, rl::environments::Multirotor<SPEC>& env, nlohmann::json json_object, rl::environments::l2f::ParametersPayload<PARAM_SPEC>& parameters){
+        from_json(device, env, json_object, static_cast<typename PARAM_SPEC::NEXT_COMPONENT&>(parameters));
+        parameters.payload.rope_length  = json_object["payload"]["rope_length"];
+        parameters.payload.payload_mass = json_object["payload"]["payload_mass"];
+        parameters.payload.drop_step    = json_object["payload"]["drop_step"];
+    }
     template <typename DEVICE, typename SPEC, typename PARAMETERS>
     void from_json(DEVICE& device, rl::environments::Multirotor<SPEC>& env, std::string json_string, PARAMETERS& parameters){
         nlohmann::json json_object = nlohmann::json::parse(json_string);
@@ -816,6 +848,15 @@ namespace rl_tools{
                 state.trajectory.langevin.velocity_raw[i] = json_object["trajectory"]["langevin"]["velocity_raw"][i];
             }
         }
+    }
+    template <typename DEVICE, typename SPEC, typename PARAMETERS, typename STATE_SPEC>
+    void from_json(DEVICE& device, rl::environments::Multirotor<SPEC>& env, const PARAMETERS& parameters, nlohmann::json json_object, rl::environments::l2f::StatePayload<STATE_SPEC>& state){
+        from_json(device, env, parameters, json_object, static_cast<typename STATE_SPEC::NEXT_COMPONENT&>(state));
+        state.angle[0] = json_object["payload"]["angle"][0];
+        state.angle[1] = json_object["payload"]["angle"][1];
+        state.angular_vel[0] = json_object["payload"]["angular_vel"][0];
+        state.angular_vel[1] = json_object["payload"]["angular_vel"][1];
+        state.attached = json_object["payload"]["attached"];
     }
     template <typename DEVICE, typename SPEC, typename PARAMETERS, typename STATE>
     void from_json(DEVICE& device, rl::environments::Multirotor<SPEC>& env, const PARAMETERS& parameters, std::string json_string, STATE& state){
@@ -1156,6 +1197,8 @@ export async function episode_init_multi(ui_state, parameters){
     set_camera(ui_state, (grid_distance > 0 ? grid_distance * grid_size * 2 : Math.cbrt(parameters[0].dynamics.mass)))
     clear_episode(ui_state)
     ui_state.drones = []
+    ui_state.payload_spheres = []
+    ui_state.payload_ropes = []
     if(!ui_state.showAxes && ui_state.origin_coordinate_systems){
         ui_state.origin_coordinate_systems.forEach(cs => {
             ui_state.simulator.remove(cs.get())
@@ -1173,6 +1216,34 @@ export async function episode_init_multi(ui_state, parameters){
             ui_state.origin_coordinate_systems.push(cs)
         }
         ui_state.drones.push(drone)
+        // Payload sphere
+        const payloadGeom = new THREE.SphereGeometry(0.04, 16, 16)
+        const payloadMat = new THREE.MeshStandardMaterial({color: 0xFF6600})
+        const payloadSphere = new THREE.Mesh(payloadGeom, payloadMat)
+        payloadSphere.visible = false
+        ui_state.simulator.add(payloadSphere)
+        ui_state.payload_spheres.push(payloadSphere)
+        // Rope line
+        const ropePoints = [new THREE.Vector3(0,0,0), new THREE.Vector3(0,0,-0.5)]
+        const ropeGeom = new THREE.BufferGeometry().setFromPoints(ropePoints)
+        const ropeMat = new THREE.LineBasicMaterial({color: 0x888888})
+        const rope = new THREE.Line(ropeGeom, ropeMat)
+        rope.visible = false
+        ui_state.simulator.add(rope)
+        ui_state.payload_ropes.push(rope)
+        // Force arrow: shows tension pulling drone toward payload
+        const forceArrow = new THREE.ArrowHelper(
+            new THREE.Vector3(0, 0, -1),
+            new THREE.Vector3(0, 0, 0),
+            0.3,
+            0xFF2200,
+            0.08,
+            0.05
+        )
+        forceArrow.visible = false
+        ui_state.simulator.add(forceArrow)
+        if(!ui_state.payload_force_arrows) ui_state.payload_force_arrows = []
+        ui_state.payload_force_arrows.push(forceArrow)
     })
 }
 
@@ -1219,13 +1290,63 @@ export function render_multi(ui_state, parameters, states, actions){
     states.map((state, i) => {
         const action = actions[i]
         const current_parameters = parameters[i]
-        ui_state.drones[i].droneFrame.position.set(...clip_position(current_parameters.dynamics.mass, state.position))
+        const drone_pos = clip_position(current_parameters.dynamics.mass, state.position)
+        ui_state.drones[i].droneFrame.position.set(...drone_pos)
         ui_state.drones[i].droneFrame.quaternion.copy(new THREE.Quaternion(state.orientation[1], state.orientation[2], state.orientation[3], state.orientation[0]).normalize())
         for(let j = 0; j < 4; j++){
             const forceArrow = ui_state.drones[i].rotors[j].forceArrow
             const force_magnitude = action[j]
             forceArrow.setDirection(new THREE.Vector3(0, 0, force_magnitude))
             forceArrow.setLength(Math.cbrt(ui_state.drones[i].scale)/10)
+        }
+        // Payload visualization
+        if(state.payload !== undefined && ui_state.payload_spheres && ui_state.payload_ropes){
+            if(state.payload.attached){
+                const theta = state.payload.angle[0]
+                const phi = state.payload.angle[1]
+                const L = (current_parameters.payload ? current_parameters.payload.rope_length : 0.5)
+                const px = drone_pos[0] + L * Math.sin(theta) * Math.cos(phi)
+                const py = drone_pos[1] + L * Math.sin(theta) * Math.sin(phi)
+                const pz = drone_pos[2] - L * Math.cos(theta)
+                ui_state.payload_spheres[i].position.set(px, py, pz)
+                ui_state.payload_spheres[i].visible = true
+                const pts = ui_state.payload_ropes[i].geometry.attributes.position
+                pts.setXYZ(0, drone_pos[0], drone_pos[1], drone_pos[2])
+                pts.setXYZ(1, px, py, pz)
+                pts.needsUpdate = true
+                ui_state.payload_ropes[i].visible = true
+                // Rope color: green → yellow → red as drop approaches
+                if(current_parameters.payload){
+                    const episode_step = (state.payload && state.payload.episode_step !== undefined) ? state.payload.episode_step : 0
+                    const remaining = current_parameters.payload.drop_step - episode_step
+                    const rope_color = remaining <= 10 ? 0xFF2200 : remaining <= 30 ? 0xFFAA00 : remaining <= 60 ? 0xFFFF00 : 0x44FF44
+                    ui_state.payload_ropes[i].material.color.setHex(rope_color)
+                }
+                // Force arrow: direction n, length proportional to tension
+                if(ui_state.payload_force_arrows && ui_state.payload_force_arrows[i]){
+                    const m_p = current_parameters.payload ? current_parameters.payload.payload_mass : 0.1
+                    const m_d = current_parameters.dynamics ? current_parameters.dynamics.mass : 2.0
+                    const g = 9.81
+                    // Approximate tension = m_p * g (simplified, centripetal ignored for display)
+                    const tension = m_p * g
+                    const arrow_len = tension / (m_d * g) * 2.0  // normalized length
+                    const dir = new THREE.Vector3(
+                        Math.sin(theta) * Math.cos(phi),
+                        Math.sin(theta) * Math.sin(phi),
+                        -Math.cos(theta)
+                    ).normalize()
+                    ui_state.payload_force_arrows[i].position.set(...drone_pos)
+                    ui_state.payload_force_arrows[i].setDirection(dir)
+                    ui_state.payload_force_arrows[i].setLength(arrow_len, arrow_len * 0.25, arrow_len * 0.15)
+                    ui_state.payload_force_arrows[i].visible = true
+                }
+            } else {
+                ui_state.payload_spheres[i].visible = false
+                ui_state.payload_ropes[i].visible = false
+                if(ui_state.payload_force_arrows && ui_state.payload_force_arrows[i]){
+                    ui_state.payload_force_arrows[i].visible = false
+                }
+            }
         }
     })
     update_camera(ui_state)

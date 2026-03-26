@@ -119,6 +119,17 @@ namespace rl_tools{
             state.current_step = 0;
             state.trajectory.type = POSITION;
         }
+        template<typename DEVICE, typename SPEC, typename PARAMETERS, typename STATE_SPEC>
+        static void _initial_state(DEVICE& device, rl::environments::Multirotor<SPEC>& env, PARAMETERS& parameters, rl::environments::l2f::StatePayload<STATE_SPEC>& state){
+            using STATE = rl::environments::l2f::StatePayload<STATE_SPEC>;
+            initial_state(device, env, parameters, static_cast<typename STATE::NEXT_COMPONENT&>(state));
+            state.angle[0] = 0;
+            state.angle[1] = 0;
+            state.angular_vel[0] = 0;
+            state.angular_vel[1] = 0;
+            state.attached = true;
+            state.episode_step = 0;
+        }
     }
 }
 RL_TOOLS_NAMESPACE_WRAPPER_END

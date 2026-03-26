@@ -93,6 +93,33 @@ const STEP_LINE_PLUGIN = {
     }
 };
 
+const DROP_LINE_PLUGIN = {
+    id: 'dropLine',
+    afterDraw(chart) {
+        if (chart._dropStep === undefined || !chart.data.labels.length) return;
+        const xScale = chart.scales.x;
+        if (!xScale) return;
+        const x = xScale.getPixelForValue(chart._dropStep);
+        if (!isFinite(x)) return;
+        const ctx = chart.ctx;
+        ctx.save();
+        ctx.beginPath();
+        ctx.moveTo(x, chart.chartArea.top);
+        ctx.lineTo(x, chart.chartArea.bottom);
+        ctx.strokeStyle = 'rgba(255, 140, 0, 0.85)';
+        ctx.lineWidth = 1.5;
+        ctx.setLineDash([4, 3]);
+        ctx.stroke();
+        // Small label at top
+        ctx.setLineDash([]);
+        ctx.fillStyle = 'rgba(255, 140, 0, 0.9)';
+        ctx.font = '8px Arial';
+        ctx.textAlign = 'center';
+        ctx.fillText('drop', x, chart.chartArea.top + 8);
+        ctx.restore();
+    }
+};
+
 const CHART_BG_PLUGIN = {
     id: 'chartBg',
     beforeDraw(chart) {
@@ -160,7 +187,7 @@ function buildChart(container, datasets, title, height = 110) {
             },
             layout: { padding: { left: 2, right: 6, top: 0, bottom: 4 } }
         },
-        plugins: [CHART_BG_PLUGIN, STEP_LINE_PLUGIN]
+        plugins: [CHART_BG_PLUGIN, DROP_LINE_PLUGIN, STEP_LINE_PLUGIN]
     });
 }
 
@@ -299,6 +326,8 @@ export class TrajectoryPlayer{
         if (!this.telem_initialized) return;
         const traj = episode?.trajectory;
         if (!traj || !traj.length) return;
+        const drop_step = episode?.parameters?.payload?.drop_step;
+        this._current_drop_step = (drop_step !== undefined) ? drop_step : undefined;
 
         const labels = traj.map((_, i) => i);
         const field = (key, idx) => traj.map(s => {
@@ -334,6 +363,7 @@ export class TrajectoryPlayer{
         chart.data.labels = labels;
         chart.data.datasets.forEach((ds, i) => { ds.data = series[i] || []; });
         chart._stepPos = 0;
+        if (this._current_drop_step !== undefined) chart._dropStep = this._current_drop_step;
         chart.update('none');
     }
 

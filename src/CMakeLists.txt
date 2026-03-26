@@ -7,3 +7,4 @@
 # add_subdirectory(rl)
 # add_subdirectory(ui_server)
 add_subdirectory(foundation_policy)
+add_subdirectory(payload_policy)
