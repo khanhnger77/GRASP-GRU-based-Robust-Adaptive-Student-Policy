@@ -69,14 +69,6 @@ async function loadChartJS() {
     });
 }
 
-function loadThreeJS() {
-    if (!loadThreeJS._p) loadThreeJS._p = import('https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js');
-    return loadThreeJS._p;
-}
-function loadOrbitControls() {
-    if (!loadOrbitControls._p) loadOrbitControls._p = import('https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/controls/OrbitControls.js');
-    return loadOrbitControls._p;
-}
 
 // MATLAB classic color order
 const MATLAB_COLORS = ['#0072BD','#D95319','#EDB120','#7E2F8E','#77AC30','#4DBEEE','#A2142F'];
@@ -200,9 +192,33 @@ function buildChart(container, datasets, title, height = 110) {
     });
 }
 
-// ── Path chart (scatter + showLine) ────────────────────────────────────────
 
-function buildPathChart(container, title, xLabel, yLabel, height = 190) {
+// Current-position dot drawn on scatter charts (synced with replay step)
+const CURRENT_POS_PLUGIN = {
+    id: 'currentPos',
+    afterDraw(chart) {
+        if (!chart._currentPos) return;
+        const xs = chart.scales.x, ys = chart.scales.y;
+        if (!xs || !ys) return;
+        const cx = xs.getPixelForValue(chart._currentPos.x);
+        const cy = ys.getPixelForValue(chart._currentPos.y);
+        if (!isFinite(cx) || !isFinite(cy)) return;
+        const ctx = chart.ctx;
+        ctx.save();
+        ctx.beginPath();
+        ctx.arc(cx, cy, 5, 0, Math.PI * 2);
+        ctx.fillStyle = 'rgba(220, 0, 0, 0.9)';
+        ctx.fill();
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+        ctx.restore();
+    }
+};
+
+// ── Path scatter chart (xy / yz / xz projections) ──────────────────────────
+
+function buildPathChart(container, title, xLabel, yLabel, height = 175) {
     const wrapper = document.createElement('div');
     wrapper.classList.add('telem-chart-wrapper');
     wrapper.style.height = height + 'px';
@@ -217,7 +233,8 @@ function buildPathChart(container, title, xLabel, yLabel, height = 190) {
             plugins: {
                 legend: {
                     position: 'top',
-                    labels: { color: '#000000', font: { size: 9, family: 'Helvetica Neue, Arial, sans-serif' }, boxWidth: 20, boxHeight: 2, padding: 6 }
+                    labels: { color: '#000000', font: { size: 9, family: 'Helvetica Neue, Arial, sans-serif' },
+                              boxWidth: 20, boxHeight: 2, padding: 6 }
                 },
                 title: {
                     display: true, text: title, color: '#000000',
@@ -228,19 +245,23 @@ function buildPathChart(container, title, xLabel, yLabel, height = 190) {
             },
             scales: {
                 x: {
-                    title: { display: true, text: xLabel, color: '#333333', font: { size: 8, family: 'Helvetica Neue, Arial, sans-serif' } },
-                    ticks: { color: '#333333', font: { size: 8, family: 'Helvetica Neue, Arial, sans-serif' }, maxTicksLimit: 5, callback: v => Number(v).toFixed(1) },
+                    title: { display: true, text: xLabel, color: '#333333',
+                             font: { size: 8, family: 'Helvetica Neue, Arial, sans-serif' } },
+                    ticks: { color: '#333333', font: { size: 8, family: 'Helvetica Neue, Arial, sans-serif' },
+                             maxTicksLimit: 5, callback: v => Number(v).toFixed(1) },
                     grid: { color: '#e0e0e0' }, border: { color: '#666666' }
                 },
                 y: {
-                    title: { display: true, text: yLabel, color: '#333333', font: { size: 8, family: 'Helvetica Neue, Arial, sans-serif' } },
-                    ticks: { color: '#333333', font: { size: 8, family: 'Helvetica Neue, Arial, sans-serif' }, maxTicksLimit: 5, callback: v => Number(v).toFixed(1) },
+                    title: { display: true, text: yLabel, color: '#333333',
+                             font: { size: 8, family: 'Helvetica Neue, Arial, sans-serif' } },
+                    ticks: { color: '#333333', font: { size: 8, family: 'Helvetica Neue, Arial, sans-serif' },
+                             maxTicksLimit: 5, callback: v => Number(v).toFixed(1) },
                     grid: { color: '#e0e0e0' }, border: { color: '#666666' }
                 }
             },
             layout: { padding: { left: 2, right: 6, top: 0, bottom: 4 } }
         },
-        plugins: [CHART_BG_PLUGIN]
+        plugins: [CHART_BG_PLUGIN, CURRENT_POS_PLUGIN]
     });
 }
 
@@ -462,9 +483,7 @@ export class TrajectoryPlayer{
     _ensureTrajPanel() {
         if (this._traj_init_promise) return this._traj_init_promise;
         this._traj_init_promise = (async () => {
-            const [, { OrbitControls }, THREE] = await Promise.all([
-                loadChartJS(), loadOrbitControls(), loadThreeJS()
-            ]);
+            await loadChartJS();
             const panel = this._traj_panel;
 
             // Header
@@ -488,96 +507,19 @@ export class TrajectoryPlayer{
             panel.appendChild(miniWrapper);
             this._mini_drone_wrapper = miniWrapper;
 
-            // ── 3D trajectory canvas ────────────────────────────────────────
-            const view3d = document.createElement('div');
-            view3d.classList.add('traj-3d-wrapper');
-            panel.appendChild(view3d);
-
-            // Hint overlay
-            const hint = document.createElement('span');
-            hint.textContent = 'drag · scroll to zoom';
-            hint.style.cssText = 'position:absolute;bottom:4px;left:50%;transform:translateX(-50%);font:9px Helvetica Neue,Arial;color:#aaa;pointer-events:none;white-space:nowrap;';
-            view3d.appendChild(hint);
-
-            const canvas3d = document.createElement('canvas');
-            view3d.appendChild(canvas3d);
-
-            const H3D = 300;
-            const W3D = view3d.clientWidth || 320;
-            const DPR = Math.min(window.devicePixelRatio, 2);
-
-            const renderer3d = new THREE.WebGLRenderer({ canvas: canvas3d, antialias: true });
-            renderer3d.setPixelRatio(DPR);
-            renderer3d.setSize(W3D, H3D);
-
-            const camera3d = new THREE.PerspectiveCamera(40, W3D / H3D, 0.001, 10000);
-            camera3d.position.set(3, 2.5, 3);
-
-            const scene3d = new THREE.Scene();
-            scene3d.background = new THREE.Color(0xffffff);
-
-            // Floor grid (scaled per trajectory in _showDroneTrajectory)
-            const gridHelper = new THREE.GridHelper(10, 20, 0xbbbbbb, 0xdddddd);
-            gridHelper.userData.isSceneHelper = true;
-            scene3d.add(gridHelper);
-
-            // Small colored axes indicator
-            const axesHelper = new THREE.AxesHelper(0.3);
-            axesHelper.userData.isSceneHelper = true;
-            scene3d.add(axesHelper);
-
-            const controls3d = new OrbitControls(camera3d, renderer3d.domElement);
-            controls3d.enableDamping = true;
-            controls3d.dampingFactor = 0.1;
-
-            // Animation state
-            const anim = {
-                running: false, drawCount: 0, maxCount: 0, splitCount: 0, speed: 3,
-                lineBefore: null, lineAfter: null, endMarker: null
-            };
-
-            this._traj3d = { THREE,
-                renderer: renderer3d, camera: camera3d, scene: scene3d,
-                controls: controls3d, gridHelper, anim };
-
-            // Resize
-            new ResizeObserver(() => {
-                const w2 = view3d.clientWidth;
-                if (w2 < 10) return;
-                renderer3d.setSize(w2, H3D);
-                camera3d.aspect = w2 / H3D;
-                camera3d.updateProjectionMatrix();
-            }).observe(view3d);
-
-            // Render + animation loop (setDrawRange approach — no CDN resolution issues)
-            const loop3d = () => {
-                if (!this._traj3d) return;
-                requestAnimationFrame(loop3d);
-                const a = this._traj3d.anim;
-                if (a.running && a.drawCount < a.maxCount) {
-                    a.drawCount = Math.min(a.drawCount + a.speed, a.maxCount);
-                    const bc = Math.min(a.drawCount, a.splitCount);
-                    const ac = Math.max(0, a.drawCount - a.splitCount);
-                    if (a.lineBefore) a.lineBefore.geometry.setDrawRange(0, bc);
-                    if (a.lineAfter)  a.lineAfter.geometry.setDrawRange(0, ac);
-                    if (a.drawCount >= a.maxCount) {
-                        if (a.endMarker) a.endMarker.visible = true;
-                        a.running = false;
-                    }
-                }
-                controls3d.update();
-                renderer3d.render(scene3d, camera3d);
-            };
-            loop3d();
-
-            // ── 2D charts ──────────────────────────────────────────────────
+            // ── Scatter path charts + reward time-series ───────────────────
             const cs = document.createElement('div');
             cs.classList.add('telem-charts');
             panel.appendChild(cs);
 
             this._traj_charts = {
-                xy: buildPathChart(cs, 'TOP VIEW  (X – Y)', 'x (m)', 'y (m)', 155),
-                xz: buildPathChart(cs, 'SIDE VIEW  (X – Z)', 'x (m)', 'z (m)', 155)
+                xy:     buildPathChart(cs, 'XY — top view',   'x (m)', 'y (m)'),
+                yz:     buildPathChart(cs, 'YZ — side view',  'y (m)', 'z (m)'),
+                xz:     buildPathChart(cs, 'XZ — front view', 'x (m)', 'z (m)'),
+                reward: buildChart(cs, [
+                    { label: 'reward',     color: '#D95319' },
+                    { label: 'cumulative', color: '#0072BD' }
+                ], 'REWARD', 85)
             };
         })();
         return this._traj_init_promise;
@@ -598,6 +540,9 @@ export class TrajectoryPlayer{
         const { parameters, trajectory } = episode;
         if (!trajectory?.length) return;
         const dt_ms = (trajectory[0]?.dt ?? 0.01) * 1000;
+        const drop_step = parameters?.payload?.drop_step;
+        const rope_length = parameters?.payload?.rope_length ?? 0.5;
+        const split = (drop_step !== undefined && drop_step < trajectory.length) ? drop_step : trajectory.length;
 
         const miniCanvas = document.createElement('canvas');
         wrapper.appendChild(miniCanvas);
@@ -610,20 +555,187 @@ export class TrajectoryPlayer{
                 await ui_module.episode_init(mini_ui_state, parameters);
             }
 
+            const THREE = mini_ui_state.THREE;
+            const scene  = mini_ui_state.scene;
+
+            // ── Fix canvas resolution + white background ───────────────────
+            if (mini_ui_state.renderer) {
+                const dpr = window.devicePixelRatio || 1;
+                const wW  = wrapper.clientWidth  || 400;
+                const wH  = wrapper.clientHeight || 420;
+                mini_ui_state.renderer.setPixelRatio(dpr);
+                mini_ui_state.renderer.setSize(wW, wH, false);
+                mini_ui_state.renderer.setClearColor(0xffffff, 1);
+                if (mini_ui_state.camera?.aspect !== undefined) {
+                    mini_ui_state.camera.aspect = wW / wH;
+                    mini_ui_state.camera.updateProjectionMatrix?.();
+                }
+            }
+
+            // ── Helper: get drone Three.js object ─────────────────────────
+            const getDroneObj = () =>
+                mini_ui_state.drone?.get?.() ??
+                mini_ui_state.drones?.[0]?.get?.() ?? null;
+
+            // ── Trail lines + rope + sphere (dynamic, built from actual world pos) ──
+            let trailBefore = null, trailAfter = null;
+            let ropeLine = null, payloadSphere = null;
+            let prevStep = -1;
+
+            if (THREE && scene) {
+                scene.add(new THREE.AxesHelper(0.5));
+
+                // Labeled axis sprites (X=red, Y=green, Z=blue — matching AxesHelper)
+                const makeAxisLabel = (text, color, pos) => {
+                    const c = document.createElement('canvas');
+                    c.width = 48; c.height = 28;
+                    const ctx2d = c.getContext('2d');
+                    ctx2d.font = 'bold 20px Arial';
+                    ctx2d.fillStyle = color;
+                    ctx2d.textAlign = 'center';
+                    ctx2d.textBaseline = 'middle';
+                    ctx2d.fillText(text, 24, 14);
+                    const sprite = new THREE.Sprite(new THREE.SpriteMaterial({
+                        map: new THREE.CanvasTexture(c),
+                        depthTest: false, transparent: true
+                    }));
+                    sprite.scale.set(0.12, 0.07, 1);
+                    sprite.position.set(...pos);
+                    scene.add(sprite);
+                };
+                makeAxisLabel('X', '#ff3333', [0.63, 0,    0   ]);
+                makeAxisLabel('Y', '#33cc33', [0,    0.63, 0   ]);
+                makeAxisLabel('Z', '#3366ff', [0,    0,    0.63]);
+
+                const makeTrail = (count, hexColor) => {
+                    const buf = new Float32Array(Math.max(count, 2) * 3);
+                    const geo = new THREE.BufferGeometry();
+                    geo.setAttribute('position', new THREE.BufferAttribute(buf, 3));
+                    geo.setDrawRange(0, 0);
+                    const line = new THREE.Line(geo,
+                        new THREE.LineBasicMaterial({ color: hexColor, transparent: true, opacity: 0.8 }));
+                    line.frustumCulled = false;
+                    scene.add(line);
+                    return line;
+                };
+                trailBefore = makeTrail(split,                         0x4499ff);
+                trailAfter  = makeTrail(trajectory.length - split,     0xff8822);
+
+                // Rope: 2-point line drone → payload
+                const ropeBuf = new Float32Array(6);
+                const ropeGeo = new THREE.BufferGeometry();
+                ropeGeo.setAttribute('position', new THREE.BufferAttribute(ropeBuf, 3));
+                ropeLine = new THREE.Line(ropeGeo,
+                    new THREE.LineBasicMaterial({ color: 0xffcc44 }));
+                ropeLine.frustumCulled = false;
+                ropeLine.visible = false;
+                scene.add(ropeLine);
+
+                payloadSphere = new THREE.Mesh(
+                    new THREE.SphereGeometry(0.06, 10, 10),
+                    new THREE.MeshBasicMaterial({ color: 0xff8800 })
+                );
+                payloadSphere.visible = false;
+                scene.add(payloadSphere);
+            }
+
             let step = 0;
             let lastStepTime = Date.now();
+            // Auto-detect which Three.js axis is "down" (opposite of drone Z=up).
+            // Compared on first frame with non-trivial altitude.
+            let downSign = null;
+
             const miniDrone = { stopped: false, renderer: mini_ui_state.renderer };
             this._mini_drone = miniDrone;
 
             const miniLoop = async () => {
                 if (miniDrone.stopped) return;
                 const now = Date.now();
+                let stepChanged = false;
                 if (now - lastStepTime >= dt_ms) {
-                    step = (step + 1) % trajectory.length;
-                    lastStepTime = now;
+                    const stepsElapsed = Math.min(Math.floor((now - lastStepTime) / dt_ms), 5);
+                    const newStep = (step + stepsElapsed) % trajectory.length;
+                    stepChanged = (newStep !== step);
+                    step = newStep;
+                    lastStepTime += stepsElapsed * dt_ms;
                 }
                 const s = trajectory[step];
-                if (s) await ui_module.render(mini_ui_state, parameters, s.state, s.action);
+                if (s) {
+                    await ui_module.render(mini_ui_state, parameters, s.state, s.action);
+
+                    if (THREE && scene) {
+                        const attached = drop_step === undefined || step < drop_step;
+
+                        // Reset trails on loop-back
+                        if (step < prevStep) {
+                            trailBefore?.geometry.setDrawRange(0, 0);
+                            trailAfter?.geometry.setDrawRange(0, 0);
+                        }
+                        prevStep = step;
+
+                        // Read drone actual world position (after render updates matrices)
+                        const droneObj = getDroneObj();
+                        let wp = null;
+                        if (droneObj) {
+                            wp = new THREE.Vector3();
+                            droneObj.getWorldPosition(wp);
+
+                            // Detect down direction once: drone state Z is up,
+                            // find which Three.js axis correlates with it.
+                            if (downSign === null) {
+                                const stateZ = s.state?.position?.[2] ?? 0;
+                                if (Math.abs(stateZ) > 0.05) {
+                                    // If world Y moves the same direction as drone Z → Y is up → down is -Y
+                                    downSign = (wp.y * stateZ > 0) ? -1 : 1;
+                                }
+                            }
+                        }
+                        const down = downSign ?? -1;
+
+                        // Write trail point for current step
+                        if (wp) {
+                            const writePoint = (line, idx) => {
+                                const buf = line.geometry.attributes.position.array;
+                                buf[idx*3] = wp.x; buf[idx*3+1] = wp.y; buf[idx*3+2] = wp.z;
+                                line.geometry.attributes.position.needsUpdate = true;
+                                line.geometry.setDrawRange(0, idx + 1);
+                            };
+                            if (attached && trailBefore && step < split) {
+                                writePoint(trailBefore, step);
+                            } else if (!attached && trailAfter) {
+                                const idx = step - split;
+                                if (idx >= 0) writePoint(trailAfter, idx);
+                            }
+                        }
+
+                        // Rope + payload at drone world position
+                        if (wp && ropeLine && payloadSphere) {
+                            if (attached) {
+                                const buf = ropeLine.geometry.attributes.position.array;
+                                buf[0] = wp.x; buf[1] = wp.y;                    buf[2] = wp.z;
+                                buf[3] = wp.x; buf[4] = wp.y + down*rope_length; buf[5] = wp.z;
+                                ropeLine.geometry.attributes.position.needsUpdate = true;
+                                ropeLine.geometry.setDrawRange(0, 2);
+                                ropeLine.visible = true;
+                                payloadSphere.position.set(wp.x, wp.y + down*rope_length, wp.z);
+                                payloadSphere.visible = true;
+                            } else {
+                                ropeLine.visible = false;
+                                payloadSphere.visible = false;
+                            }
+                        }
+                    }
+
+                    // Sync charts — only when step actually changes
+                    if (stepChanged && this._traj_charts) {
+                        const pos = s.state?.position || [0, 0, 0];
+                        const tc = this._traj_charts;
+                        if (tc.xy)  { tc.xy._currentPos  = { x: pos[0], y: pos[1] }; tc.xy.update('none'); }
+                        if (tc.yz)  { tc.yz._currentPos  = { x: pos[1], y: pos[2] }; tc.yz.update('none'); }
+                        if (tc.xz)  { tc.xz._currentPos  = { x: pos[0], y: pos[2] }; tc.xz.update('none'); }
+                        if (tc.reward) { tc.reward._stepPos = step; tc.reward.update('none'); }
+                    }
+                }
                 requestAnimationFrame(miniLoop);
             };
             requestAnimationFrame(miniLoop);
@@ -640,118 +752,44 @@ export class TrajectoryPlayer{
         this._ensureTrajPanel().then(() => {
             const traj = episode.trajectory;
             const drop_step = episode.parameters?.payload?.drop_step;
-            const positions = traj.map(s => s?.state?.position || [0, 0, 0]);
-            const split = (drop_step !== undefined && drop_step < positions.length) ? drop_step : positions.length;
 
-            // ── 2D charts ──────────────────────────────────────────────────
-            const makeDataset = (pts, label, color) => ({
+            // ── Scatter path charts ────────────────────────────────────────
+            const positions = traj.map(s => s?.state?.position || [0, 0, 0]);
+            const split = (drop_step !== undefined && drop_step < positions.length)
+                          ? drop_step : positions.length;
+
+            const makeDs = (pts, label, color) => ({
                 label, data: pts,
-                borderColor: color, backgroundColor: 'transparent',
+                borderColor: color, backgroundColor: color,
                 borderWidth: 1.5, pointRadius: 0, showLine: true, tension: 0
             });
-            const updateChart = (chart, xi, yi) => {
+            const fillScatter = (chart, xi, yi) => {
                 const before = positions.slice(0, split).map(p => ({ x: p[xi], y: p[yi] }));
-                const after = positions.slice(split).map(p => ({ x: p[xi], y: p[yi] }));
+                const after  = positions.slice(split).map(p => ({ x: p[xi], y: p[yi] }));
                 chart.data.datasets = [
-                    makeDataset(before, drop_step !== undefined ? 'with payload' : 'trajectory', '#0072BD'),
-                    ...(after.length > 0 ? [makeDataset(after, 'after drop', '#D95319')] : []),
+                    makeDs(before, drop_step !== undefined ? 'with payload' : 'path', '#0072BD'),
+                    ...(after.length > 0 ? [makeDs(after, 'after drop', '#D95319')] : []),
                     { label: 'start', data: before.length ? [before[0]] : [],
-                      borderColor: '#77AC30', backgroundColor: '#77AC30', pointRadius: 5, showLine: false }
+                      borderColor: '#77AC30', backgroundColor: '#77AC30',
+                      pointRadius: 5, showLine: false }
                 ];
                 chart.update('none');
             };
-            updateChart(this._traj_charts.xy, 0, 1);
-            updateChart(this._traj_charts.xz, 0, 2);
+            fillScatter(this._traj_charts.xy, 0, 1);
+            fillScatter(this._traj_charts.yz, 1, 2);
+            fillScatter(this._traj_charts.xz, 0, 2);
 
-            // ── 3D scene (animated via setDrawRange) ──────────────────────
-            // Drone (x, y, z_up) → Three.js Y-up: (x, z, y)
-            if (this._traj3d) {
-                const { THREE, scene: scene3d, camera: camera3d,
-                        controls: controls3d, gridHelper, anim } = this._traj3d;
-
-                // Remove previous trajectory objects
-                const toRemove = [];
-                scene3d.traverse(obj => { if (obj.userData.isTraj) toRemove.push(obj); });
-                toRemove.forEach(obj => {
-                    if (obj.geometry) obj.geometry.dispose();
-                    if (obj.material) obj.material.dispose();
-                    scene3d.remove(obj);
-                });
-
-                // Map drone coords to Three.js Y-up
-                const mapPt  = p => [p[0], p[2], p[1]];
-                const ptsBefore = positions.slice(0, split).map(mapPt);
-                const ptsAfter  = positions.slice(split).map(mapPt);
-                const allPts    = [...ptsBefore, ...ptsAfter];
-
-                // Build a Line with all positions pre-allocated; animate via setDrawRange
-                const makeLine = (pts, hexColor) => {
-                    if (pts.length < 2) return null;
-                    const buf = new Float32Array(pts.length * 3);
-                    pts.forEach((p, i) => { buf[i*3]=p[0]; buf[i*3+1]=p[1]; buf[i*3+2]=p[2]; });
-                    const geo = new THREE.BufferGeometry();
-                    geo.setAttribute('position', new THREE.BufferAttribute(buf, 3));
-                    geo.setDrawRange(0, 0); // start hidden
-                    const mat = new THREE.LineBasicMaterial({ color: hexColor });
-                    const line = new THREE.Line(geo, mat);
-                    line.frustumCulled = false; // bounding sphere won't shift with drawRange
-                    line.userData.isTraj = true;
-                    scene3d.add(line);
-                    return line;
-                };
-
-                const lineBefore = makeLine(ptsBefore, 0x0072BD);
-                const lineAfter  = makeLine(ptsAfter,  0xD95319);
-
-                // Start marker — green sphere, always visible
-                if (ptsBefore.length > 0) {
-                    const sm = new THREE.Mesh(
-                        new THREE.SphereGeometry(0.05, 12, 12),
-                        new THREE.MeshBasicMaterial({ color: 0x77AC30 }));
-                    sm.position.set(...ptsBefore[0]);
-                    sm.userData.isTraj = true;
-                    scene3d.add(sm);
-                }
-
-                // End marker — dark red sphere, hidden until animation finishes
-                const em = new THREE.Mesh(
-                    new THREE.SphereGeometry(0.04, 12, 12),
-                    new THREE.MeshBasicMaterial({ color: 0xA2142F }));
-                if (allPts.length > 0) {
-                    em.position.set(...allPts[allPts.length - 1]);
-                    em.userData.isTraj = true;
-                    em.visible = false;
-                    scene3d.add(em);
-                }
-
-                // Reposition floor grid below trajectory
-                if (allPts.length > 0) {
-                    const minY   = Math.min(...allPts.map(p => p[1])) - 0.3;
-                    const extent = Math.max(1, ...allPts.map(p => Math.abs(p[0])), ...allPts.map(p => Math.abs(p[2])));
-                    gridHelper.position.y = minY;
-                    gridHelper.scale.setScalar(Math.max(extent * 2.5, 2) / 10);
-                }
-
-                // Fit camera to bounding box
-                const box3 = new THREE.Box3();
-                allPts.forEach(p => box3.expandByPoint(new THREE.Vector3(...p)));
-                const center3 = new THREE.Vector3();
-                box3.getCenter(center3);
-                const span3 = box3.getSize(new THREE.Vector3()).length();
-                const dist3 = Math.max(span3 * 1.8, 0.5);
-                camera3d.position.copy(center3).add(
-                    new THREE.Vector3(dist3 * 0.7, dist3 * 0.55, dist3 * 0.9));
-                controls3d.target.copy(center3);
-                controls3d.update();
-
-                // Start animation
-                Object.assign(anim, {
-                    running: true, drawCount: 0,
-                    maxCount: allPts.length, splitCount: ptsBefore.length,
-                    speed: Math.max(2, Math.floor(allPts.length / 200)),
-                    lineBefore, lineAfter, endMarker: em
-                });
-            }
+            // ── Reward time-series ─────────────────────────────────────────
+            const labels = traj.map((_, i) => i);
+            const rewards = traj.map(s => s?.reward ?? 0);
+            let cum = 0;
+            const rewChart = this._traj_charts.reward;
+            rewChart.data.labels = labels;
+            rewChart.data.datasets[0].data = rewards;
+            rewChart.data.datasets[1].data = rewards.map(r => (cum += r));
+            rewChart._stepPos = 0;
+            if (drop_step !== undefined) rewChart._dropStep = drop_step;
+            rewChart.update('none');
 
             if (this._traj_uav_badge) {
                 this._traj_uav_badge.textContent = `UAV ${droneIndex}`;
