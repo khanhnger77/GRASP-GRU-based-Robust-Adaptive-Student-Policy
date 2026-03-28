@@ -1,0 +1,61 @@
+mavlink:
+  connection_string: "udp:localhost:14550"
+  heartbeat_timeout: 10       # seconds to wait for heartbeat
+  command_timeout: 5          # seconds to wait for command ack
+  setpoint_rate_hz: 50        # setpoint publishing frequency
+
+flight:
+  takeoff_altitude: 1.5       # meters (NED: negative = up, but we use positive convention here)
+  arm_delay: 2.0              # seconds after arming before offboard
+  offboard_init_delay: 1.0    # seconds to pre-send setpoints before switching mode
+
+tests:
+  hover:
+    target: [0.0, 0.0, -1.5]  # NED frame
+    duration: 30.0
+    settle_threshold: 0.05    # meters
+
+  step_response:
+    start: [0.0, 0.0, -1.5]
+    end: [2.0, 2.0, -1.5]
+    duration: 20.0
+    settle_threshold: 0.1
+
+  figure8:
+    center: [0.0, 0.0, -1.5]
+    scale_x: 2.0
+    scale_y: 1.0
+    speed: medium             # slow | medium | fast
+    duration: 60.0
+    speeds:
+      slow: 0.3
+      medium: 0.6
+      fast: 1.0
+
+  disturbance:
+    base_position: [0.0, 0.0, -1.5]
+    disturbance_offset: [1.0, 0.0, 0.0]
+    hold_before: 10.0
+    hold_after: 15.0
+
+controllers:
+  pid:
+    kp: [0.8, 0.8, 1.0]
+    ki: [0.05, 0.05, 0.1]
+    kd: [0.2, 0.2, 0.3]
+    max_velocity: 3.0         # m/s
+
+  rl:
+    # The RL policy runs inside PX4 (rl_tools_policy module, 500 Hz).
+    # Activated via: rl_tools_commander overwrite on  (MAVLink shell)
+    # No model file is loaded by Python.
+
+logging:
+  output_dir: "logs"
+  csv_flush_interval: 10      # flush every N rows
+
+plotting:
+  show: true
+  save: true
+  output_dir: "plots"
+  dpi: 150
