@@ -23,11 +23,25 @@ from mavlink_interface.connection import MAVLinkConnection
 
 logger = logging.getLogger(__name__)
 
-# Type masks for SET_POSITION_TARGET_LOCAL_NED
-# Bit set = ignore that field.
-POSITION_MASK = 0b0000_111_111_000_111  # use position only (ignore vel, accel, yaw-rate)
-VELOCITY_MASK = 0b0000_111_111_111_000  # use velocity only
-POSITION_VELOCITY_MASK = 0b0000_111_111_000_000  # use pos + vel
+# Type masks for SET_POSITION_TARGET_LOCAL_NED (MAVLink POSITION_TARGET_TYPEMASK).
+# A bit value of 1 means "ignore this field".
+#
+# Bit layout (0-indexed from LSB):
+#   bit 0 = x pos   bit 1 = y pos   bit 2 = z pos
+#   bit 3 = vx      bit 4 = vy      bit 5 = vz
+#   bit 6 = ax      bit 7 = ay      bit 8 = az
+#   bit 9 = force   bit 10 = yaw    bit 11 = yaw_rate
+#
+# POSITION only  → ignore vel(3-5), accel(6-8), force(9), yaw(10), yaw_rate(11)
+#                  bits 3..11 set, bits 0..2 clear
+POSITION_MASK = 0b0000_111_111_111_000  # = 0xDF8 = 3576  ← USE x y z
+
+# VELOCITY only  → ignore pos(0-2), accel(6-8), force(9), yaw(10), yaw_rate(11)
+#                  bits 0..2 and 6..11 set, bits 3..5 clear
+VELOCITY_MASK = 0b0000_111_111_000_111  # = 0xDC7 = 3527  ← USE vx vy vz
+
+# POSITION + VELOCITY  → ignore accel(6-8), force(9), yaw(10), yaw_rate(11)
+POSITION_VELOCITY_MASK = 0b0000_111_111_000_000  # = 0xDC0 = 3520  ← USE pos + vel
 
 
 class OffboardController:
@@ -63,20 +77,73 @@ class OffboardController:
     # Arming
     # ------------------------------------------------------------------
 
-    def arm(self, timeout: float = 10.0) -> None:
-        """Arm the vehicle and wait for confirmation."""
-        logger.info("Arming vehicle...")
-        self.master.arducopter_arm()
+    def wait_for_ekf(self, timeout: float = 30.0) -> None:
+        """
+        Wait until EKF2 has a valid position estimate.
+
+        PX4 will reject arm with MAV_RESULT_TEMPORARILY_REJECTED (code 1) if
+        EKF2 hasn't converged yet.  We wait for LOCAL_POSITION_NED messages
+        to start arriving — that indicates EKF is running and position is valid.
+        """
+        logger.info("Waiting for EKF2 position estimate (timeout=%.0fs)...", timeout)
         deadline = time.time() + timeout
         while time.time() < deadline:
-            msg = self.conn.recv_match("COMMAND_ACK", timeout=1.0)
+            msg = self.conn.recv_match("LOCAL_POSITION_NED", timeout=1.0)
+            if msg is not None:
+                logger.info("EKF2 ready — pos (%.2f, %.2f, %.2f)", msg.x, msg.y, msg.z)
+                return
+        logger.warning("EKF2 ready-check timed out — trying to arm anyway.")
+
+    def arm(self, timeout: float = 20.0, retry_interval: float = 1.0) -> None:
+        """
+        Arm the vehicle, retrying on MAV_RESULT_TEMPORARILY_REJECTED.
+
+        PX4 returns code 1 (TEMPORARILY_REJECTED) when pre-arm checks are
+        still running (EKF not ready, sensors warming up, etc.).  We retry
+        at `retry_interval` seconds until `timeout` expires.
+        """
+        logger.info("Arming vehicle...")
+        deadline = time.time() + timeout
+        attempt  = 0
+
+        while time.time() < deadline:
+            attempt += 1
+            # Use COMMAND_LONG directly for reliable cross-firmware arming
+            self.master.mav.command_long_send(
+                self.master.target_system,
+                self.master.target_component,
+                mavutil.mavlink.MAV_CMD_COMPONENT_ARM_DISARM,
+                0,      # confirmation
+                1.0,    # param1: 1 = arm
+                0.0,    # param2: 0 = normal arm (not force)
+                0, 0, 0, 0, 0,
+            )
+
+            msg = self.conn.recv_match("COMMAND_ACK", timeout=2.0)
             if msg and msg.command == mavutil.mavlink.MAV_CMD_COMPONENT_ARM_DISARM:
                 if msg.result == mavutil.mavlink.MAV_RESULT_ACCEPTED:
-                    logger.info("Armed successfully.")
+                    logger.info("Armed successfully (attempt %d).", attempt)
                     return
+                elif msg.result == 1:  # MAV_RESULT_TEMPORARILY_REJECTED
+                    logger.info(
+                        "Arm temporarily rejected (attempt %d) — EKF/pre-arm "
+                        "checks not ready, retrying in %.1fs...", attempt, retry_interval
+                    )
+                    time.sleep(retry_interval)
+                    continue
                 else:
-                    raise RuntimeError(f"Arm rejected with result code {msg.result}")
-        raise TimeoutError("Arm command timed out.")
+                    # Permanent rejection (wrong mode, safety switch, etc.)
+                    raise RuntimeError(
+                        f"Arm permanently rejected (result={msg.result}). "
+                        "Check PX4 pre-arm status in QGroundControl."
+                    )
+            # No ACK yet — keep waiting
+            time.sleep(0.2)
+
+        raise TimeoutError(
+            f"Arm timed out after {timeout}s ({attempt} attempts). "
+            "Tip: check PX4 console with 'commander status'."
+        )
 
     def disarm(self, force: bool = False) -> None:
         """Disarm the vehicle. Set force=True to disarm while in the air (unsafe)."""
@@ -97,20 +164,42 @@ class OffboardController:
     # ------------------------------------------------------------------
 
     def set_mode(self, mode_id: int, timeout: float = 5.0) -> None:
-        """Switch PX4 custom flight mode by numeric ID."""
-        self.master.mav.set_mode_send(
+        """
+        Switch PX4 custom flight mode using MAV_CMD_DO_SET_MODE (COMMAND_LONG).
+
+        WHY NOT set_mode_send():
+          The old SET_MODE message encodes custom_mode as a uint32 where PX4
+          reads main_mode = (custom_mode >> 16) & 0xFF.  Passing mode_id=6
+          gives main_mode = 0 (MANUAL), not OFFBOARD.
+
+        MAV_CMD_DO_SET_MODE via COMMAND_LONG passes main_mode directly in
+        param2 as a plain integer — no bit-shifting needed.
+
+          param1 = MAV_MODE_FLAG_CUSTOM_MODE_ENABLED
+          param2 = main_mode  (6=OFFBOARD, 9=LAND, 7=STABILIZED …)
+          param3 = sub_mode   (0 for all modes we use)
+        """
+        self.master.mav.command_long_send(
             self.master.target_system,
-            mavutil.mavlink.MAV_MODE_FLAG_CUSTOM_MODE_ENABLED,
-            mode_id,
+            self.master.target_component,
+            mavutil.mavlink.MAV_CMD_DO_SET_MODE,
+            0,                                                    # confirmation
+            mavutil.mavlink.MAV_MODE_FLAG_CUSTOM_MODE_ENABLED,   # param1 base mode
+            float(mode_id),                                       # param2 main mode
+            0.0,                                                  # param3 sub mode
+            0.0, 0.0, 0.0, 0.0,
         )
         deadline = time.time() + timeout
         while time.time() < deadline:
             msg = self.conn.recv_match("COMMAND_ACK", timeout=0.5)
             if msg and msg.command == mavutil.mavlink.MAV_CMD_DO_SET_MODE:
                 if msg.result == mavutil.mavlink.MAV_RESULT_ACCEPTED:
+                    logger.debug("Mode %d accepted.", mode_id)
                     return
-        # Mode switches sometimes don't ACK explicitly; verify via HEARTBEAT
-        logger.debug("Mode switch ACK not received; continuing.")
+                else:
+                    logger.warning("Mode switch rejected (result=%d).", msg.result)
+                    return
+        logger.debug("Mode switch ACK timeout — assuming accepted.")
 
     def set_offboard_mode(self, init_delay: float = 1.0) -> None:
         """

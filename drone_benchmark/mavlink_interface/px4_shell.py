@@ -25,10 +25,13 @@ logger = logging.getLogger(__name__)
 # SERIAL_CONTROL device IDs (from mavlink common.xml)
 SERIAL_CONTROL_DEV_SHELL = 10
 
-# SERIAL_CONTROL flags
-SERIAL_CONTROL_FLAG_REPLY   = 1   # request reply
-SERIAL_CONTROL_FLAG_RESPOND = 2   # expect response data
-SERIAL_CONTROL_FLAG_EXCLUSIVE = 4 # take exclusive control of port
+# SERIAL_CONTROL flags (MAVLink spec)
+# REPLY=1     → set by PX4 on *responses*, NOT by GCS on commands
+# RESPOND=2   → GCS sets this to request PX4 to send output back
+# EXCLUSIVE=4 → take exclusive shell access (prevents QGC interference)
+SERIAL_CONTROL_FLAG_REPLY     = 1
+SERIAL_CONTROL_FLAG_RESPOND   = 2
+SERIAL_CONTROL_FLAG_EXCLUSIVE = 4
 
 _MAX_DATA = 70  # SERIAL_CONTROL.data field is fixed 70 bytes
 
@@ -68,7 +71,7 @@ class PX4Shell:
             data = list(chunk) + [0] * (_MAX_DATA - len(chunk))
             self.master.mav.serial_control_send(
                 device=SERIAL_CONTROL_DEV_SHELL,
-                flags=SERIAL_CONTROL_FLAG_REPLY | SERIAL_CONTROL_FLAG_RESPOND,
+                flags=SERIAL_CONTROL_FLAG_EXCLUSIVE | SERIAL_CONTROL_FLAG_RESPOND,
                 timeout=0,
                 baudrate=0,
                 count=len(chunk),

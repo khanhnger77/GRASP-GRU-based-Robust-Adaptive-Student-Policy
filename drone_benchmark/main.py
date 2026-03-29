@@ -90,13 +90,19 @@ def load_config(path: str) -> dict:
 def build_controller(name: str, config: dict):
     if name == "pid":
         pid_cfg = config["controllers"]["pid"]
+        # Outer position loop: MPC_XY_P, MPC_Z_P
+        # Velocity loop: MPC_XY_VEL_P/I/D_ACC, MPC_Z_VEL_P/I/D_ACC
+        # (PIDController is kept for reference; actual flight uses PX4's built-in stack)
         ctrl = PIDController(
-            kp=pid_cfg["kp"],
-            ki=pid_cfg["ki"],
-            kd=pid_cfg["kd"],
-            max_velocity=pid_cfg["max_velocity"],
+            kp=pid_cfg["position_p"],
+            ki=pid_cfg["velocity_i"],
+            kd=pid_cfg["velocity_d"],
+            max_velocity=pid_cfg["max_vel_xy"],
         )
-        logger.info("PID controller initialised.")
+        logger.info(
+            "PID controller initialised (PX4 X500 params: pos_P=%s vel_I=%s vel_D=%s).",
+            pid_cfg["position_p"], pid_cfg["velocity_i"], pid_cfg["velocity_d"],
+        )
         return ctrl
 
     elif name == "rl":

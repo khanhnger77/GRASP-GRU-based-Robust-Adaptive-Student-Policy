@@ -108,7 +108,7 @@ class RLController:
         if not self._active:
             logger.warning("set_target called while RL is not active — ignoring.")
             return
-        cmd = f"rl_tools_commander set_target {x:.3f} {y:.3f} {z:.3f}"
+        cmd = f"rl_tools_commander set_target_position {x:.3f} {y:.3f} {z:.3f}"
         self._shell.run_nowait(cmd)
 
     # ------------------------------------------------------------------

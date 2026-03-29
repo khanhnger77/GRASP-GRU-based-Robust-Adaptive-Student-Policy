@@ -109,27 +109,46 @@ class BaseTest(ABC):
     # ------------------------------------------------------------------
 
     def _pre_flight(self) -> None:
-        """Arm and climb to takeoff altitude using PX4's PID via OFFBOARD."""
-        arm_delay    = self.config["flight"]["arm_delay"]
-        init_delay   = self.config["flight"]["offboard_init_delay"]
-        takeoff_alt  = self.config["flight"]["takeoff_altitude"]
-        takeoff_ned_z = -takeoff_alt  # NED: negative = up
+        """
+        Arm and climb to takeoff altitude using PX4 OFFBOARD + position setpoints.
 
-        # Stream a constant hover setpoint BEFORE switching to OFFBOARD.
-        # PX4 refuses the mode switch if no setpoints have arrived yet.
+        Sequence:
+          1. Request telemetry streams from PX4 (LOCAL_POSITION_NED, ATTITUDE,
+             ACTUATOR_OUTPUTS are NOT sent by default over UDP in SITL).
+          2. Pre-stream position setpoints for `init_delay` seconds — PX4 requires
+             setpoints to already be arriving before accepting the OFFBOARD mode switch.
+          3. Arm.
+          4. Switch to OFFBOARD.
+          5. Wait for drone to reach target altitude (with timeout).
+        """
+        arm_delay     = self.config["flight"]["arm_delay"]
+        init_delay    = self.config["flight"]["offboard_init_delay"]
+        takeoff_alt   = self.config["flight"]["takeoff_altitude"]
+        takeoff_ned_z = -takeoff_alt  # NED convention: negative Z = up
+
+        # Step 1 — request telemetry streams so we actually receive data
+        self.connection.request_streams(
+            rate_hz=int(self.config["mavlink"]["setpoint_rate_hz"])
+        )
+        time.sleep(0.3)
+
+        # Step 2 — start background position setpoint stream
+        # With fixed POSITION_MASK this now correctly commands z = -1.5 m NED.
         self.ctrl.start_setpoint_stream(target_pos=(0.0, 0.0, takeoff_ned_z))
 
+        # Step 3 — wait for EKF, then arm (with retry on pre-arm reject)
+        self.ctrl.wait_for_ekf(timeout=30.0)
         self.ctrl.arm()
         time.sleep(arm_delay)
 
+        # Step 4 — switch to OFFBOARD (setpoints already streaming for init_delay s)
         self.ctrl.set_offboard_mode(init_delay=init_delay)
         logger.info("OFFBOARD active. Climbing to %.1f m AGL...", takeoff_alt)
 
-        self._wait_for_altitude(takeoff_ned_z, tolerance=0.15, timeout=25.0)
+        # Step 5 — wait for altitude
+        self._wait_for_altitude(takeoff_ned_z, tolerance=0.20, timeout=30.0)
         logger.info("Takeoff complete.")
-
-        # Brief stabilisation pause before the test begins
-        time.sleep(1.0)
+        time.sleep(1.0)  # brief stabilisation
 
     def _post_flight(self) -> None:
         """Deactivate RL (if active), land, disarm, stop logging."""
@@ -160,41 +179,56 @@ class BaseTest(ABC):
 
     def send_setpoint(self, x: float, y: float, z: float) -> None:
         """
-        Unified setpoint sender for both controller types.
+        Unified setpoint sender — both controllers receive position setpoints.
 
-        PID:  calls send_velocity_setpoint — output from controller.compute()
-              is a velocity; the position setpoint is also streamed for logging.
-        RL:   calls send_position_setpoint — PX4 records the target; the actual
-              motor commands come from rl_tools_policy inside PX4.
+        Design rationale
+        ────────────────
+        PID mode:  We send SET_POSITION_TARGET_LOCAL_NED with POSITION_MASK so
+                   PX4's own multi-loop PID (position → velocity → attitude →
+                   rate → motors) tracks the setpoint.  This is the correct
+                   "baseline PID" — it uses the full PX4 controller stack which
+                   is what any real OFFBOARD flight would use.
+
+        RL mode:   We send the same position setpoint via MAVLink (so PX4 flight
+                   logs show the intended target) AND notify rl_tools_commander
+                   via shell.  The RL policy then drives the motors directly at
+                   500 Hz, bypassing PX4's PID stack.
+
+        Both paths use the background stream to keep OFFBOARD mode alive.
+        Calling send_position_setpoint() here also sends an immediate one-shot
+        command in addition to the stream, ensuring minimal latency.
         """
-        snap = self.tlog.get_latest()
-        current = (snap.pos_x, snap.pos_y, snap.pos_z)
-        target  = (x, y, z)
-
         self.tlog.update_setpoint(x, y, z)
+        self.ctrl.update_setpoint(x, y, z)          # update background stream
+        self.ctrl.send_position_setpoint(x, y, z)   # immediate one-shot
 
         if self._using_rl:
-            # Inform the on-board RL commander about the target
-            self.controller.set_target(x, y, z)
-            # Also send a MAVLink position setpoint so PX4 flight logs reflect
-            # the desired target (does NOT override RL motor output)
-            self.ctrl.send_position_setpoint(x, y, z)
-        else:
-            # Python PID → velocity command → PX4 inner loop
-            vx, vy, vz = self.controller.compute(current=current, target=target)
-            self.ctrl.send_velocity_setpoint(vx, vy, vz)
+            self.controller.set_target(x, y, z)     # notify rl_tools_commander
 
     def _wait_for_altitude(
-        self, target_z_ned: float, tolerance: float = 0.2, timeout: float = 25.0
+        self, target_z_ned: float, tolerance: float = 0.2, timeout: float = 30.0
     ) -> None:
-        """Block until pos_z is within tolerance of target_z (NED)."""
+        """
+        Block until pos_z is within tolerance of target_z (NED).
+
+        Reads directly from MAVLink so this works both before and after
+        the telemetry logger has started.
+        """
         deadline = time.time() + timeout
+        last_z = None
         while time.time() < deadline:
-            snap = self.tlog.get_latest()
-            if abs(snap.pos_z - target_z_ned) < tolerance:
-                return
-            time.sleep(0.05)
-        logger.warning("Altitude target not reached within %.0fs — continuing.", timeout)
+            msg = self.connection.recv_match("LOCAL_POSITION_NED", timeout=0.5)
+            if msg:
+                last_z = msg.z
+                err = abs(msg.z - target_z_ned)
+                logger.debug("Altitude: z=%.2f  target=%.2f  err=%.2f", msg.z, target_z_ned, err)
+                if err < tolerance:
+                    return
+        z_str = f"{last_z:.2f}" if last_z is not None else "unknown"
+        logger.warning(
+            "Altitude not reached in %.0fs (last z=%.2s, target=%.2f). Continuing.",
+            timeout, z_str, target_z_ned,
+        )
 
     def _sleep_rate(self, rate_hz: float) -> None:
         time.sleep(1.0 / rate_hz)

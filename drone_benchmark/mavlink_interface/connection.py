@@ -62,6 +62,59 @@ class MAVLinkConnection:
             self._connected = False
             logger.info("MAVLink connection closed.")
 
+    def request_streams(self, rate_hz: int = 50) -> None:
+        """
+        Ask PX4 to stream telemetry messages at the requested rate.
+
+        PX4 SITL does NOT push all messages by default over UDP — we must
+        explicitly request them.  Uses both the legacy REQUEST_DATA_STREAM
+        and the newer SET_MESSAGE_INTERVAL so it works across PX4 versions.
+
+        Call this once after connect(), before starting tests.
+        """
+        if self.master is None:
+            return
+
+        interval_us = int(1e6 / rate_hz)  # microseconds between messages
+        sys  = self.master.target_system
+        comp = self.master.target_component
+
+        # ── Legacy REQUEST_DATA_STREAM (works on all PX4 versions) ──────────
+        stream_ids = [
+            mavutil.mavlink.MAV_DATA_STREAM_ALL,            # everything
+            mavutil.mavlink.MAV_DATA_STREAM_POSITION,       # LOCAL_POSITION_NED
+            mavutil.mavlink.MAV_DATA_STREAM_EXTRA1,         # ATTITUDE
+            mavutil.mavlink.MAV_DATA_STREAM_RAW_CONTROLLER, # ACTUATOR_CONTROL_TARGET
+            mavutil.mavlink.MAV_DATA_STREAM_EXTRA3,         # ACTUATOR_OUTPUTS (PX4)
+        ]
+        for stream_id in stream_ids:
+            self.master.mav.request_data_stream_send(
+                sys, comp, stream_id, rate_hz, 1  # 1 = start
+            )
+            time.sleep(0.02)
+
+        # ── MAVLink 2 SET_MESSAGE_INTERVAL for key message IDs ───────────────
+        # These IDs are stable across PX4 versions.
+        message_ids = {
+            "LOCAL_POSITION_NED":      32,
+            "ATTITUDE":                30,
+            "ACTUATOR_CONTROL_TARGET": 140,
+            "ACTUATOR_OUTPUT_STATUS":  375,   # PX4-specific (ACTUATOR_OUTPUTS)
+            "BATTERY_STATUS":          147,
+        }
+        for name, msg_id in message_ids.items():
+            self.master.mav.command_long_send(
+                sys, comp,
+                mavutil.mavlink.MAV_CMD_SET_MESSAGE_INTERVAL,
+                0,              # confirmation
+                float(msg_id),  # param1: message ID
+                float(interval_us),  # param2: interval in µs
+                0, 0, 0, 0, 0,
+            )
+            time.sleep(0.02)
+
+        logger.info("Telemetry streams requested at %d Hz.", rate_hz)
+
     def recv_match(self, msg_type: str, blocking: bool = True, timeout: float = 1.0):
         """
         Helper: receive a specific MAVLink message.

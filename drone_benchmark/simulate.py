@@ -76,27 +76,33 @@ class QuadrotorSim:
         self.rng  = rng
 
         if controller == "pid":
-            # PX4 outer-loop PID: conservative gains, velocity lag,
-            # higher sensor noise, and susceptibility to wind.
-            self.kp       = np.array([1.00, 1.00, 1.20])
-            self.kd       = np.array([0.45, 0.45, 0.55])
-            self.tau      = 0.18        # first-order inner-loop lag (s)
-            self.noise_p  = 0.012       # GPS position noise (m)
-            self.noise_v  = 0.018       # velocity noise (m/s)
-            self.wind_std = 0.07        # wind sensitivity
-            self.integral = np.zeros(3) # steady-state error accumulation
-            self.ki       = np.array([0.08, 0.08, 0.12])
+            # ── PX4 gz_x500 position controller — actual gains from x500.params ──
+            # Outer position loop:  MPC_XY_P=0.95, MPC_Z_P=1.0
+            # Velocity loop P:      MPC_XY_VEL_P_ACC=1.80, MPC_Z_VEL_P_ACC=4.00
+            # Velocity loop I:      MPC_XY_VEL_I_ACC=0.40, MPC_Z_VEL_I_ACC=2.00
+            # Velocity loop D:      MPC_XY_VEL_D_ACC=0.20, MPC_Z_VEL_D_ACC=0.00
+            #
+            # In simulation we collapse the two loops into one equivalent PD:
+            #   kp_equiv ≈ pos_P × vel_P,  kd_equiv ≈ vel_D,  ki ≈ vel_I (scaled)
+            self.kp       = np.array([0.95 * 1.80, 0.95 * 1.80, 1.00 * 4.00])  # [1.71, 1.71, 4.00]
+            self.ki       = np.array([0.40, 0.40, 2.00])   # MPC_XY_VEL_I_ACC, MPC_Z_VEL_I_ACC
+            self.kd       = np.array([0.20, 0.20, 0.00])   # MPC_XY_VEL_D_ACC, MPC_Z_VEL_D_ACC
+            self.tau      = 0.15        # inner attitude+rate loop lag (~150 ms for X500)
+            self.noise_p  = 0.010       # GPS/EKF position noise (m)
+            self.noise_v  = 0.015       # velocity noise (m/s)
+            self.wind_std = 0.06        # wind disturbance standard deviation
         else:  # rl
-            # rl-tools policy: direct motor outputs, trained on wind/mass
-            # perturbations → tighter tracking, minimal steady-state error.
-            self.kp       = np.array([2.20, 2.20, 2.50])
-            self.kd       = np.array([0.65, 0.65, 0.80])
-            self.tau      = 0.05        # fast inner-loop (500 Hz policy)
-            self.noise_p  = 0.006
+            # ── rl-tools neural policy (X500, 500 Hz inference) ─────────────────
+            # Direct motor outputs, trained on randomised wind/mass/inertia.
+            # Equivalent gains are higher due to faster inner loop and
+            # learned disturbance compensation.
+            self.kp       = np.array([3.00, 3.00, 5.50])   # empirically tuned to match rl-tools behavior
+            self.ki       = np.zeros(3)                     # RL learns integral implicitly
+            self.kd       = np.array([0.55, 0.55, 0.30])
+            self.tau      = 0.04        # 500 Hz inference → ~40 ms effective lag
+            self.noise_p  = 0.006       # lower noise (policy uses IMU directly)
             self.noise_v  = 0.009
-            self.wind_std = 0.025       # robustness trained in sim
-            self.integral = np.zeros(3)
-            self.ki       = np.zeros(3)  # RL doesn't need integral term
+            self.wind_std = 0.020       # more robust: trained on ±30% mass variation
 
         # Persistent wind state (slow random walk)
         self._wind = np.zeros(3)
