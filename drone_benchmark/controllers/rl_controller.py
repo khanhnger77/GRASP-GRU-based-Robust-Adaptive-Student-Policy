@@ -40,8 +40,8 @@ class RLController:
 
     Usage:
         ctrl = RLController(connection)
-        ctrl.activate()
-        ctrl.set_target(0.0, 0.0, -1.5)    # NED
+        ctrl.activate(x=0.0, y=0.0, z=-1.5)   # pre-set target to avoid jerk
+        ctrl.set_target(0.0, 0.0, -1.5)
         # ... test runs, telemetry logged externally ...
         ctrl.deactivate()
     """
@@ -55,15 +55,32 @@ class RLController:
     # Lifecycle
     # ------------------------------------------------------------------
 
-    def activate(self) -> None:
+    def activate(
+        self,
+        x: Optional[float] = None,
+        y: Optional[float] = None,
+        z: Optional[float] = None,
+    ) -> None:
         """
         Activate the on-board RL controller.
 
-        Equivalent to typing "rl_tools_commander overwrite on" in the MAVLink
-        console.  The RL module will latch onto the current vehicle position as
-        the initial target and begin flying immediately.
+        If (x, y, z) are provided, the RL target is pre-set to that position
+        *before* overwrite is enabled.  This prevents a jerk when the RL policy
+        first takes control because it will already be targeting where the drone
+        currently hovers.
+
+        Equivalent to:
+            rl_tools_commander set_target_position x y z
+            rl_tools_commander overwrite on
         """
         logger.info("Activating on-board RL controller...")
+
+        if x is not None and y is not None and z is not None:
+            cmd = f"rl_tools_commander set_target_position {x:.3f} {y:.3f} {z:.3f}"
+            self._shell.run(cmd)
+            logger.debug("Pre-set RL target to (%.3f, %.3f, %.3f)", x, y, z)
+            time.sleep(0.05)
+
         response = self._shell.run("rl_tools_commander overwrite on")
         logger.debug("Shell response: %r", response)
         self._active = True
@@ -97,11 +114,6 @@ class RLController:
         """
         Update the RL commander's position target (NED frame, metres).
 
-        Sends a shell command to the rl_tools_commander module.
-        NOTE: requires the `set_target` custom_command to be implemented
-        in RLtoolsCommander.  If not present, the target is held at the
-        activation position (default POSITION mode behaviour).
-
         Args:
             x, y, z: NED coordinates (z negative = altitude in metres)
         """
@@ -113,12 +125,6 @@ class RLController:
 
     # ------------------------------------------------------------------
     # Compatibility shim
-    # ─────────────────
-    # Tests call controller.compute(current, target) for PID and receive a
-    # velocity command.  For the RL controller, compute() is a no-op on the
-    # Python side — the RL policy already runs inside PX4 and does not need
-    # Python to compute anything.  We return (0,0,0) as a sentinel so callers
-    # can detect "RL mode" without branching on type().
     # ------------------------------------------------------------------
 
     def compute(
@@ -131,8 +137,7 @@ class RLController:
 
         Side effect: updates the target position of the on-board RL module.
         Returns (0, 0, 0) — callers should NOT send velocity setpoints when
-        using the RL controller; use send_position_setpoint instead so PX4
-        knows the target for its own logs.
+        using the RL controller.
         """
         self.set_target(*target)
         return 0.0, 0.0, 0.0

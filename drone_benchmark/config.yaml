@@ -8,6 +8,10 @@ flight:
   takeoff_altitude: 1.5       # meters (NED: negative = up, but we use positive convention here)
   arm_delay: 2.0              # seconds after arming before offboard
   offboard_init_delay: 1.0    # seconds to pre-send setpoints before switching mode
+  spawn_yaw_deg: 90.0         # drone's initial yaw at SITL spawn (degrees). Measured: ~89°.
+  settle_delay: 10.0          # max seconds to wait for stable hover before logging
+  stable_threshold: 0.08     # position error (m) below which drone is considered stable
+  stable_hold: 2.0           # seconds drone must stay within threshold before logging starts
 
 tests:
   hover:

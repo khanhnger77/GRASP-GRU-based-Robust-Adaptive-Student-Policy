@@ -43,6 +43,9 @@ VELOCITY_MASK = 0b0000_111_111_000_111  # = 0xDC7 = 3527  ← USE vx vy vz
 # POSITION + VELOCITY  → ignore accel(6-8), force(9), yaw(10), yaw_rate(11)
 POSITION_VELOCITY_MASK = 0b0000_111_111_000_000  # = 0xDC0 = 3520  ← USE pos + vel
 
+# POSITION + YAW  → bit 10 cleared so PX4 tracks the yaw setpoint
+POSITION_YAW_MASK = 0b0000_101_111_111_000       # = 0xBF8 = 3064  ← USE x y z yaw
+
 
 class OffboardController:
     """
@@ -71,6 +74,7 @@ class OffboardController:
         self._stream_thread: Optional[threading.Thread] = None
         self._stream_active = False
         self._current_setpoint: Tuple[float, float, float] = (0.0, 0.0, -1.5)
+        self._current_yaw: float = 0.0
         self._setpoint_lock = threading.Lock()
 
     # ------------------------------------------------------------------
@@ -218,6 +222,29 @@ class OffboardController:
         logger.info("Switching to LAND mode...")
         self.set_mode(self.PX4_MODE_LAND)
 
+    def land_via_setpoint(self, timeout: float = 20.0) -> None:
+        """
+        Land by sending a position setpoint at ground level (z=0 NED) while
+        staying in OFFBOARD mode — no mode switch, no jerk.
+
+        Reads current x/y so the drone descends straight down.
+        Returns once z > -0.25 m (near ground) or timeout.
+        """
+        logger.info("Landing via position setpoint (no mode switch)...")
+        msg = self.conn.recv_match("LOCAL_POSITION_NED", timeout=1.0)
+        cur_x = msg.x if msg else 0.0
+        cur_y = msg.y if msg else 0.0
+
+        # Target: stay over current x/y, descend to ground (z=0 NED)
+        self.update_setpoint(cur_x, cur_y, 0.0)
+
+        deadline = time.time() + timeout
+        while time.time() < deadline:
+            m = self.conn.recv_match("LOCAL_POSITION_NED", timeout=0.5)
+            if m and m.z > -0.25:   # within 25 cm of ground
+                break
+        logger.info("Landed (setpoint method).")
+
     # ------------------------------------------------------------------
     # Setpoint streaming (background thread)
     # ------------------------------------------------------------------
@@ -249,13 +276,21 @@ class OffboardController:
         while self._stream_active:
             with self._setpoint_lock:
                 pos = self._current_setpoint
-            self._send_position_setpoint(pos[0], pos[1], pos[2])
+                yaw = self._current_yaw
+            self._send_position_setpoint(
+                pos[0], pos[1], pos[2], yaw=yaw, type_mask=POSITION_YAW_MASK
+            )
             time.sleep(interval)
 
     def update_setpoint(self, x: float, y: float, z: float) -> None:
         """Thread-safe update of the streaming setpoint position (NED)."""
         with self._setpoint_lock:
             self._current_setpoint = (x, y, z)
+
+    def update_yaw(self, yaw_rad: float) -> None:
+        """Thread-safe update of the yaw setpoint (radians, NED convention: 0=North)."""
+        with self._setpoint_lock:
+            self._current_yaw = yaw_rad
 
     # ------------------------------------------------------------------
     # Low-level MAVLink message builders

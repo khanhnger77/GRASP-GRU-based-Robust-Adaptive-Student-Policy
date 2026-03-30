@@ -118,6 +118,8 @@ class TelemetryLogger:
         logger.info("Telemetry logger started → %s", self.csv_path)
 
     def stop(self) -> None:
+        if not self._running and self._csv_file is None:
+            return  # already stopped — idempotent
         self._running = False
         if self._recv_thread:
             self._recv_thread.join(timeout=2.0)
@@ -126,6 +128,7 @@ class TelemetryLogger:
         self._flush_buffer()
         if self._csv_file:
             self._csv_file.close()
+            self._csv_file = None
         logger.info("Telemetry logger stopped. %d rows written.", len(self._all_data))
 
     def get_latest(self) -> TelemetrySnapshot:
