@@ -35,7 +35,6 @@ using PARAMETERS_BASE_TYPE = ParametersTrajectory<ParametersTrajectorySpecificat
     ParametersBase<PARAMETERS_SPEC>>>>>>>;
 using PARAMETERS_TYPE = ParametersPayload<ParametersPayloadSpecification<T, TI, PARAMETERS_BASE_TYPE>>;
 
-// --- Need PARAMETER_VALUES of the right type for STATIC_PARAMETERS ---
 using BASE_ENV_TYPE = rlt::rl::environments::Multirotor<Specification<T, TI>>;
 static constexpr auto BASE_PARAMS = BASE_ENV_TYPE::SPEC::PARAMETER_VALUES;
 static constexpr PARAMETERS_TYPE NOMINAL_PARAMETERS = {
@@ -53,7 +52,7 @@ static constexpr PARAMETERS_TYPE NOMINAL_PARAMETERS = {
         },
         BASE_PARAMS.trajectory
     },
-    {(T)0.5, (T)0.1, (TI)250}  // rope_length, payload_mass, drop_step
+    {(T)0.5, (T)0.5, (TI)250}  // rope_length, payload_mass, drop_step
 };
 
 struct STATIC_PARAMETERS{
@@ -85,13 +84,14 @@ int main(int argc, char** argv){
     RNG rng;
     rlt::malloc(device, rng);
     TI seed = 0;
-    TI N = 5;
+    TI N = 10;
     rlt::init(device, rng, seed);
     ENVIRONMENT env;
     ENVIRONMENT::Parameters params;
     rlt::init(device, env);
 
     auto overwrite = [](auto& parameters) -> void {
+        parameters.mdp.init = parameters::init::init_60_deg<PARAMETERS_SPEC>;
         parameters.mdp.reward = {
             false,   // non-negative
             01.00,   // scale
@@ -109,39 +109,39 @@ int main(int argc, char** argv){
             00.00,   // position_error_integral
         };
         parameters.domain_randomization = {
-            2.6, 3.9,    // thrust_to_weight min/max
-            17.0, 32.0,  // torque_to_inertia min/max
-            1.60, 2.40,  // mass min/max
+            2.6, 3.9,    // thrust_to_weight min/max  (x500 ~3.25)
+            17.0, 32.0,  // torque_to_inertia min/max (x500 ~23)
+            1.60, 2.40,  // mass min/max              (x500 2.0kg ±20%)
             0.06,        // mass_size_deviation
-            0.040, 0.068, // motor_time_constant_rising min/max
+            0.040, 0.068, // motor_time_constant_rising  min/max (0.054 ±~25%)
             0.040, 0.068, // motor_time_constant_falling min/max
-            0.081, 0.135, // rotor_torque_constant min/max
-            0.12,         // orientation_offset_angle_max
+            0.081, 0.135, // rotor_torque_constant min/max (0.108 ±~25%)
+            0.12,         // orientation_offset_angle_max (~7 deg)
             0.16          // disturbance_force_max
         };
         parameters.payload.rope_length  = 0.5;
-        parameters.payload.payload_mass = 0.1;
+        parameters.payload.payload_mass = 1.0;
         parameters.payload.drop_step    = 250; // 2.5s at 100Hz
     };
 
-    overwrite(env.parameters); // set valid domain_randomization ranges on env before sampling
-    overwrite(params);
-    rlt::sample_initial_parameters(device, env, params, rng);
-    overwrite(params);
-    std::cout << rlt::json(device, env, params) << std::endl;
+    // Set x500_real as base dynamics in env so sample_initial_parameters starts from it
+    env.parameters.dynamics = parameters::dynamics::x500::real<T, TI>;
+    overwrite(env.parameters);
 
     std::filesystem::path output_path = "./src/payload_policy/dynamics_parameters/";
     if (!std::filesystem::exists(output_path)){
         std::filesystem::create_directories(output_path);
     }
     for (TI set_i = 0; set_i < N; ++set_i){
-        rlt::sample_initial_parameters(device, env, params, rng);
         overwrite(params);
+        rlt::sample_initial_parameters(device, env, params, rng); // randomizes dynamics around x500_real
+        overwrite(params); // force fixed payload/reward/init config
         std::ofstream output(output_path / (std::to_string(set_i) + ".json"));
         auto params_copy = params;
         params_copy.domain_randomization = parameters::domain_randomization_disabled<T>;
         output << rlt::json(device, env, params_copy);
         output.close();
+        std::cout << "Saved set " << set_i << ": mass=" << params.dynamics.mass << std::endl;
     }
 
     rlt::free(device, rng);

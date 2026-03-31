@@ -42,6 +42,12 @@ namespace builder{
 
         static constexpr auto BASE_PARAMS = BASE_ENV::SPEC::PARAMETER_VALUES;
 
+        static constexpr auto BASE_MDP = [](){
+            auto mdp = BASE_PARAMS.mdp;
+            mdp.init = parameters::init::init_60_deg<PARAMETERS_SPEC>;
+            return mdp;
+        }();
+
         // Drop happens at 2.5 seconds into the episode (250 steps at 100 Hz)
         static constexpr TI DROP_STEP = 250;
 
@@ -52,7 +58,7 @@ namespace builder{
                         {   // ParametersBase
                             BASE_PARAMS.dynamics,
                             BASE_PARAMS.integration,
-                            BASE_PARAMS.mdp
+                            BASE_MDP
                         },
                         BASE_PARAMS.disturbances
                     },

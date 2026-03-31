@@ -516,10 +516,9 @@ export class TrajectoryPlayer{
                 xy:     buildPathChart(cs, 'XY — top view',   'x (m)', 'y (m)'),
                 yz:     buildPathChart(cs, 'YZ — side view',  'y (m)', 'z (m)'),
                 xz:     buildPathChart(cs, 'XZ — front view', 'x (m)', 'z (m)'),
-                reward: buildChart(cs, [
-                    { label: 'reward',     color: '#D95319' },
-                    { label: 'cumulative', color: '#0072BD' }
-                ], 'REWARD', 85)
+                motors: buildChart(cs,
+                    Array.from({ length: 4 }, (_, i) => ({ label: `m${i+1}`, color: MATLAB_COLORS[i] })),
+                    'MOTOR COMMANDS', 85)
             };
         })();
         return this._traj_init_promise;
@@ -733,7 +732,7 @@ export class TrajectoryPlayer{
                         if (tc.xy)  { tc.xy._currentPos  = { x: pos[0], y: pos[1] }; tc.xy.update('none'); }
                         if (tc.yz)  { tc.yz._currentPos  = { x: pos[1], y: pos[2] }; tc.yz.update('none'); }
                         if (tc.xz)  { tc.xz._currentPos  = { x: pos[0], y: pos[2] }; tc.xz.update('none'); }
-                        if (tc.reward) { tc.reward._stepPos = step; tc.reward.update('none'); }
+                        if (tc.motors) { tc.motors._stepPos = step; tc.motors.update('none'); }
                     }
                 }
                 requestAnimationFrame(miniLoop);
@@ -779,17 +778,17 @@ export class TrajectoryPlayer{
             fillScatter(this._traj_charts.yz, 1, 2);
             fillScatter(this._traj_charts.xz, 0, 2);
 
-            // ── Reward time-series ─────────────────────────────────────────
+            // ── Motor commands time-series ─────────────────────────────────
             const labels = traj.map((_, i) => i);
-            const rewards = traj.map(s => s?.reward ?? 0);
-            let cum = 0;
-            const rewChart = this._traj_charts.reward;
-            rewChart.data.labels = labels;
-            rewChart.data.datasets[0].data = rewards;
-            rewChart.data.datasets[1].data = rewards.map(r => (cum += r));
-            rewChart._stepPos = 0;
-            if (drop_step !== undefined) rewChart._dropStep = drop_step;
-            rewChart.update('none');
+            const motorChart = this._traj_charts.motors;
+            const nMotors = Math.min(4, Array.isArray(traj[0]?.action) ? traj[0].action.length : 0);
+            motorChart.data.labels = labels;
+            for (let mi = 0; mi < nMotors; mi++) {
+                motorChart.data.datasets[mi].data = traj.map(s => s?.action?.[mi] ?? 0);
+            }
+            motorChart._stepPos = 0;
+            if (drop_step !== undefined) motorChart._dropStep = drop_step;
+            motorChart.update('none');
 
             if (this._traj_uav_badge) {
                 this._traj_uav_badge.textContent = `UAV ${droneIndex}`;

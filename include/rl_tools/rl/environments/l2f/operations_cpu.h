@@ -1329,7 +1329,7 @@ export function render_multi(ui_state, parameters, states, actions){
                     const g = 9.81
                     // Approximate tension = m_p * g (simplified, centripetal ignored for display)
                     const tension = m_p * g
-                    const arrow_len = tension / (m_d * g) * 2.0  // normalized length
+                    const arrow_len = tension / (m_d * g) * 0.5  // normalized length
                     const dir = new THREE.Vector3(
                         Math.sin(theta) * Math.cos(phi),
                         Math.sin(theta) * Math.sin(phi),
