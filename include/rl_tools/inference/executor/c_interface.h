@@ -41,7 +41,6 @@ extern "C" {
         RLtoolsInferenceExecutorJitterStatus timing_jitter;
         RLtoolsInferenceExecutorBiasStatus timing_bias;
     } RLtoolsInferenceExecutorStatus;
-    void rl_tools_inference_executor_status_message(RLtoolsInferenceExecutorStatus status, char* target, int target_size);
 #ifdef __cplusplus
 }
 #endif

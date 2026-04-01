@@ -95,9 +95,8 @@ namespace builder{
                     observation::OrientationRotationMatrix<observation::OrientationRotationMatrixSpecification<T, TI,
                     observation::TrajectoryTrackingLinearVelocity<observation::LinearVelocitySpecification<T, TI,
                     observation::AngularVelocityDelayed<observation::AngularVelocityDelayedSpecification<T, TI, ANGULAR_VELOCITY_DELAY,
-                    observation::ActionHistory<observation::ActionHistorySpecification<T, TI, 1,
-                    observation::RotorSpeeds<observation::RotorSpeedsSpecification<T, TI>>>
-            >>>>>>>>>;
+                    observation::ActionHistory<observation::ActionHistorySpecification<T, TI, 1
+                    >>>>>>>;
             // Critic (privileged) sees payload state: theta, phi, dtheta, dphi, attached
             using OBSERVATION_TYPE_PRIVILEGED = observation::TrajectoryTrackingPosition<observation::PositionSpecification<T, TI,
                     observation::OrientationRotationMatrix<observation::OrientationRotationMatrixSpecification<T, TI,
