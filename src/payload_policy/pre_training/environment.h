@@ -44,7 +44,7 @@ namespace builder{
 
         static constexpr auto BASE_MDP = [](){
             auto mdp = BASE_PARAMS.mdp;
-            mdp.init = parameters::init::init_60_deg<PARAMETERS_SPEC>;
+            mdp.init = parameters::init::init_40_deg<PARAMETERS_SPEC>;
             return mdp;
         }();
 
@@ -69,7 +69,9 @@ namespace builder{
             {   // payload
                 (T)0.5,          // rope_length [m]
                 (T)0.5,          // payload_mass [kg] — ~26% of drone, causes visible jolt at drop
-                DROP_STEP        // drop_step
+                DROP_STEP,       // drop_step
+                (T)0.14,         // max_initial_swing_angle [rad] ~8 deg: learnable lateral force ~7%g
+                (T)0.3           // max_initial_swing_vel [rad/s]: gentle swing, max theta ~9 deg
             }
         };
 

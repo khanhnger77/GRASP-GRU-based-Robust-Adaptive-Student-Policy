@@ -200,12 +200,22 @@ namespace rl_tools{
             using T = typename SPEC::T;
             using STATE = StatePayload<STATE_SPEC>;
             sample_initial_state(device, env, parameters, static_cast<typename STATE::NEXT_COMPONENT&>(state), rng);
-            // Small random perturbation to theta so the pendulum starts near vertical
-            T max_theta = (T)0.1; // ~6 degrees
-            state.angle[0] = random::uniform_real_distribution(random_dev, (T)0, max_theta, rng);
-            state.angle[1] = random::uniform_real_distribution(random_dev, (T)0, (T)(2*3.14159265358979323846), rng);
-            state.angular_vel[0] = 0;
-            state.angular_vel[1] = 0;
+            T max_theta = parameters.payload.max_initial_swing_angle;
+            T max_vel   = parameters.payload.max_initial_swing_vel;
+            if(max_theta > (T)0){
+                state.angle[0] = random::uniform_real_distribution(random_dev, (T)0, max_theta, rng);
+                state.angle[1] = random::uniform_real_distribution(random_dev, (T)0, (T)6.28318530717958647692, rng);
+            } else {
+                state.angle[0] = (T)0;
+                state.angle[1] = (T)0;
+            }
+            if(max_vel > (T)0){
+                state.angular_vel[0] = random::normal_distribution::sample(random_dev, (T)0, max_vel / (T)2, rng);
+                state.angular_vel[1] = random::normal_distribution::sample(random_dev, (T)0, max_vel / (T)2, rng);
+            } else {
+                state.angular_vel[0] = (T)0;
+                state.angular_vel[1] = (T)0;
+            }
             state.attached = true;
             state.episode_step = 0;
         }

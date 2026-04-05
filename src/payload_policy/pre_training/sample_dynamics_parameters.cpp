@@ -52,7 +52,7 @@ static constexpr PARAMETERS_TYPE NOMINAL_PARAMETERS = {
         },
         BASE_PARAMS.trajectory
     },
-    {(T)0.5, (T)0.5, (TI)250}  // rope_length, payload_mass, drop_step
+    {(T)0.5, (T)0.5, (TI)250, (T)0.14, (T)0.3}  // rope_length, payload_mass, drop_step, max_initial_swing_angle, max_initial_swing_vel
 };
 
 struct STATIC_PARAMETERS{
@@ -84,14 +84,14 @@ int main(int argc, char** argv){
     RNG rng;
     rlt::malloc(device, rng);
     TI seed = 0;
-    TI N = 10;
+    TI N = 3;
     rlt::init(device, rng, seed);
     ENVIRONMENT env;
     ENVIRONMENT::Parameters params;
     rlt::init(device, env);
 
     auto overwrite = [](auto& parameters) -> void {
-        parameters.mdp.init = parameters::init::init_60_deg<PARAMETERS_SPEC>;
+        parameters.mdp.init = parameters::init::init_40_deg<PARAMETERS_SPEC>;
         parameters.mdp.reward = {
             false,   // non-negative
             01.00,   // scale
@@ -99,11 +99,11 @@ int main(int argc, char** argv){
             -100.00, // termination penalty
             01.00,   // position
             00.00,   // position_clip
-            00.10,   // orientation
-            00.00,   // linear_velocity
-            00.00,   // angular_velocity
-            00.00,   // linear_acceleration
-            00.00,   // angular_acceleration
+            00.20,   // orientation          (0.10→0.20: faster tilt recovery after drop jolt)
+            00.50,   // linear_velocity
+            00.20,   // angular_velocity
+            00.08,   // linear_acceleration  (0→0.08: penalize jolt at drop, reward pre-drop swing damping)
+            00.03,   // angular_acceleration (0→0.03: smooth torque during drop recovery)
             00.00,   // action
             01.00,   // d_action
             00.00,   // position_error_integral
@@ -119,9 +119,11 @@ int main(int argc, char** argv){
             0.12,         // orientation_offset_angle_max (~7 deg)
             0.16          // disturbance_force_max
         };
-        parameters.payload.rope_length  = 0.5;
-        parameters.payload.payload_mass = 1.0;
-        parameters.payload.drop_step    = 250; // 2.5s at 100Hz
+        parameters.payload.rope_length              = 0.5;
+        parameters.payload.payload_mass             = 1.0;
+        parameters.payload.drop_step                = 250; // 2.5s at 100Hz
+        parameters.payload.max_initial_swing_angle  = 0.14; // ~8 deg: learnable lateral force ~7%g
+        parameters.payload.max_initial_swing_vel    = 0.3;  // rad/s: gentle swing
     };
 
     // Set x500_real as base dynamics in env so sample_initial_parameters starts from it

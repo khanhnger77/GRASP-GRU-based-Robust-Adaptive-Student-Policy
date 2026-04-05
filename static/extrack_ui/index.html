@@ -96,7 +96,6 @@
                 }
                 return false
             })
-            // const runs_with_steps = runs_with_ui.filter(run => run.steps && Object.keys(run.steps).length > 0)
             let selected_runs = runs_with_steps
             if(params.has('experiment') === true){
                 const potential_selected_runs = runs_with_steps.filter(run => run.config.experiment === params.get('experiment'))
@@ -122,9 +121,77 @@
                     selected_runs = potential_selected_runs
                 }
             }
-            const run = selected_runs[0]
+
             const latest_run_container = document.getElementById('latest-run-container')
-            const show_run = new ShowRun(latest_run_container, run, latest_run_size)
+
+            function load_run(run) {
+                latest_run_container.innerHTML = ''
+                const back_btn = document.createElement('button')
+                back_btn.textContent = '← Back to experiment list'
+                back_btn.className = 'exp-back-btn'
+                back_btn.addEventListener('click', () => show_selection())
+                latest_run_container.appendChild(back_btn)
+                const run_container = document.createElement('div')
+                latest_run_container.appendChild(run_container)
+                new ShowRun(run_container, run, latest_run_size)
+            }
+
+            function show_selection() {
+                // Group by experiment timestamp (newest first)
+                const by_experiment = {}
+                for(const run of selected_runs){
+                    const key = run.config.experiment || 'unknown'
+                    if(!by_experiment[key]) by_experiment[key] = []
+                    by_experiment[key].push(run)
+                }
+                const exp_keys = Object.keys(by_experiment).sort().reverse()
+
+                const sel = document.createElement('div')
+                sel.className = 'exp-selection'
+
+                const heading = document.createElement('h2')
+                heading.textContent = `Select an Experiment (${selected_runs.length} available)`
+                heading.className = 'exp-selection-heading'
+                sel.appendChild(heading)
+
+                for(const exp_key of exp_keys){
+                    const runs = by_experiment[exp_key]
+                    const section = document.createElement('div')
+                    section.className = 'exp-section'
+
+                    const sec_title = document.createElement('div')
+                    sec_title.className = 'exp-section-title'
+                    sec_title.textContent = exp_key
+                    section.appendChild(sec_title)
+
+                    const grid = document.createElement('div')
+                    grid.className = 'exp-run-grid'
+
+                    for(const run of runs){
+                        const parts = [
+                            run.config.population_values || run.config.name || '',
+                            run.config.seed !== undefined ? `seed ${run.config.seed}` : ''
+                        ].filter(Boolean)
+                        const btn = document.createElement('button')
+                        btn.className = 'exp-run-btn'
+                        btn.textContent = parts.join(' · ') || 'Run'
+                        btn.addEventListener('click', () => load_run(run))
+                        grid.appendChild(btn)
+                    }
+                    section.appendChild(grid)
+                    sel.appendChild(section)
+                }
+
+                latest_run_container.innerHTML = ''
+                latest_run_container.appendChild(sel)
+            }
+
+            // If URL params pinpoint exactly one run, load it directly; otherwise show selection
+            if(selected_runs.length === 1 && (params.has('experiment') || params.has('experiment_name') || params.has('experiment_population_values') || params.has('experiment_seed'))){
+                load_run(selected_runs[0])
+            } else {
+                show_selection()
+            }
         })
 
         // Latest Zoo Runs
@@ -169,9 +236,9 @@
     </script>
 </head>
 <body>
-    <h1>Latest Run</h1>
+    <h1>Experiment Viewer</h1>
     <div id="latest-run-container">
-        Loading...
+        <p style="color:#888">Loading experiment index...</p>
     </div>
     <div id="latest-zoo-runs-section" style="display: none;">
         <h1>Latest Zoo Runs</h1>

@@ -216,9 +216,11 @@ namespace rl_tools::rl::environments::l2f{
     struct ParametersPayload: SPEC::NEXT_COMPONENT{
         static constexpr typename SPEC::TI N = SPEC::NEXT_COMPONENT::N;
         struct Payload{
-            typename SPEC::T rope_length;   // length of the rope [m]
-            typename SPEC::T payload_mass;  // mass of the payload [kg]
-            typename SPEC::TI drop_step;    // episode step at which payload is dropped (0 = never drop)
+            typename SPEC::T rope_length;             // length of the rope [m]
+            typename SPEC::T payload_mass;            // mass of the payload [kg]
+            typename SPEC::TI drop_step;              // episode step at which payload is dropped (0 = never drop)
+            typename SPEC::T max_initial_swing_angle; // max polar angle [rad] at episode start (0 = hang vertical)
+            typename SPEC::T max_initial_swing_vel;   // max angular velocity [rad/s] at episode start (0 = stationary)
         };
         Payload payload;
     };

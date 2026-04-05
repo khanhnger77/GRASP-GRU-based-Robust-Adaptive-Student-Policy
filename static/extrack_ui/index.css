@@ -66,3 +66,66 @@
     width: 100%;
     text-align: center;
 }
+
+/* Experiment selection screen */
+.exp-selection {
+    width: 100%;
+    max-width: 900px;
+    padding: 8px 0;
+}
+.exp-selection-heading {
+    margin-bottom: 16px;
+    font-size: 1.2em;
+    color: #ccc;
+}
+.exp-section {
+    margin-bottom: 20px;
+    border: 1px solid #444;
+    border-radius: 6px;
+    padding: 12px 16px;
+    background: #1a1a1a;
+    text-align: left;
+}
+.exp-section-title {
+    font-family: monospace;
+    font-size: 1em;
+    color: #7af;
+    margin-bottom: 10px;
+    font-weight: bold;
+}
+.exp-run-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+.exp-run-btn {
+    padding: 7px 16px;
+    cursor: pointer;
+    border-radius: 4px;
+    border: 1px solid #555;
+    background: #2a2a2a;
+    color: #ddd;
+    font-size: 13px;
+    transition: background 0.15s, border-color 0.15s;
+}
+.exp-run-btn:hover {
+    background: #2a5a3a;
+    border-color: #4a4;
+    color: #fff;
+}
+.exp-back-btn {
+    align-self: flex-start;
+    margin-bottom: 12px;
+    padding: 6px 14px;
+    cursor: pointer;
+    border-radius: 4px;
+    border: 1px solid #555;
+    background: #2a2a2a;
+    color: #bbb;
+    font-size: 13px;
+    transition: background 0.15s;
+}
+.exp-back-btn:hover {
+    background: #383838;
+    color: #fff;
+}

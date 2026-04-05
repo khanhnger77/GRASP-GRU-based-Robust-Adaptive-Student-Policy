@@ -416,7 +416,9 @@ namespace rl_tools{
         json_string += ", \"payload\": {";
         json_string += "\"rope_length\": " + std::to_string(parameters.payload.rope_length) + ", ";
         json_string += "\"payload_mass\": " + std::to_string(parameters.payload.payload_mass) + ", ";
-        json_string += "\"drop_step\": " + std::to_string(parameters.payload.drop_step);
+        json_string += "\"drop_step\": " + std::to_string(parameters.payload.drop_step) + ", ";
+        json_string += "\"max_initial_swing_angle\": " + std::to_string(parameters.payload.max_initial_swing_angle) + ", ";
+        json_string += "\"max_initial_swing_vel\": " + std::to_string(parameters.payload.max_initial_swing_vel);
         json_string += "}";
         json_string += (top_level ? "}" : "");
         return json_string;
@@ -747,9 +749,11 @@ namespace rl_tools{
     template <typename DEVICE, typename SPEC, typename PARAM_SPEC>
     void from_json(DEVICE& device, rl::environments::Multirotor<SPEC>& env, nlohmann::json json_object, rl::environments::l2f::ParametersPayload<PARAM_SPEC>& parameters){
         from_json(device, env, json_object, static_cast<typename PARAM_SPEC::NEXT_COMPONENT&>(parameters));
-        parameters.payload.rope_length  = json_object["payload"]["rope_length"];
-        parameters.payload.payload_mass = json_object["payload"]["payload_mass"];
-        parameters.payload.drop_step    = json_object["payload"]["drop_step"];
+        parameters.payload.rope_length             = json_object["payload"]["rope_length"];
+        parameters.payload.payload_mass            = json_object["payload"]["payload_mass"];
+        parameters.payload.drop_step               = json_object["payload"]["drop_step"];
+        parameters.payload.max_initial_swing_angle = json_object["payload"].value("max_initial_swing_angle", 0.0);
+        parameters.payload.max_initial_swing_vel   = json_object["payload"].value("max_initial_swing_vel", 0.0);
     }
     template <typename DEVICE, typename SPEC, typename PARAMETERS>
     void from_json(DEVICE& device, rl::environments::Multirotor<SPEC>& env, std::string json_string, PARAMETERS& parameters){
