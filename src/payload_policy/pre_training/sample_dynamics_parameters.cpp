@@ -109,7 +109,7 @@ int main(int argc, char** argv){
             00.00,   // position_error_integral
         };
         parameters.domain_randomization = {
-            2.6, 3.9,    // thrust_to_weight min/max  (x500 ~3.25)
+            3.3, 4.2,    // thrust_to_weight min/max  (x500 ~3.25)
             17.0, 32.0,  // torque_to_inertia min/max (x500 ~23)
             1.60, 2.40,  // mass min/max              (x500 2.0kg ±20%)
             0.06,        // mass_size_deviation
@@ -140,7 +140,7 @@ int main(int argc, char** argv){
         overwrite(params); // force fixed payload/reward/init config
         std::ofstream output(output_path / (std::to_string(set_i) + ".json"));
         auto params_copy = params;
-        params_copy.domain_randomization = parameters::domain_randomization_disabled<T>;
+        // params_copy.domain_randomization = parameters::domain_randomization_disabled<T>;
         output << rlt::json(device, env, params_copy);
         output.close();
         std::cout << "Saved set " << set_i << ": mass=" << params.dynamics.mass << std::endl;
