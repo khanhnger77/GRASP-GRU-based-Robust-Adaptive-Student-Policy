@@ -84,14 +84,14 @@ int main(int argc, char** argv){
     RNG rng;
     rlt::malloc(device, rng);
     TI seed = 0;
-    TI N = 3;
+    TI N = 10;
     rlt::init(device, rng, seed);
     ENVIRONMENT env;
     ENVIRONMENT::Parameters params;
     rlt::init(device, env);
 
     auto overwrite = [](auto& parameters) -> void {
-        parameters.mdp.init = parameters::init::init_40_deg<PARAMETERS_SPEC>;
+        parameters.mdp.init = parameters::init::init_20_deg<PARAMETERS_SPEC>;
         parameters.mdp.reward = {
             false,   // non-negative
             01.00,   // scale
@@ -119,11 +119,12 @@ int main(int argc, char** argv){
             0.12,         // orientation_offset_angle_max (~7 deg)
             0.16          // disturbance_force_max
         };
+        parameters.mdp.termination.linear_velocity_threshold = 4.0; // was 2.0, too tight for 20-deg init recovery
         parameters.payload.rope_length              = 0.5;
-        parameters.payload.payload_mass             = 1.0;
+        parameters.payload.payload_mass             = 0.5;
         parameters.payload.drop_step                = 250; // 2.5s at 100Hz
-        parameters.payload.max_initial_swing_angle  = 0.14; // ~8 deg: learnable lateral force ~7%g
-        parameters.payload.max_initial_swing_vel    = 0.3;  // rad/s: gentle swing
+        parameters.payload.max_initial_swing_angle  = 0.0; // ~8 deg: learnable lateral force ~7%g
+        parameters.payload.max_initial_swing_vel    = 0.0;  // rad/s: gentle swing
     };
 
     // Set x500_real as base dynamics in env so sample_initial_parameters starts from it
@@ -140,7 +141,7 @@ int main(int argc, char** argv){
         overwrite(params); // force fixed payload/reward/init config
         std::ofstream output(output_path / (std::to_string(set_i) + ".json"));
         auto params_copy = params;
-        // params_copy.domain_randomization = parameters::domain_randomization_disabled<T>;
+        params_copy.domain_randomization = parameters::domain_randomization_disabled<T>;
         output << rlt::json(device, env, params_copy);
         output.close();
         std::cout << "Saved set " << set_i << ": mass=" << params.dynamics.mass << std::endl;

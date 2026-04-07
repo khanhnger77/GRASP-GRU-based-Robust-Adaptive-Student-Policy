@@ -147,7 +147,7 @@ int main(int argc, char** argv){
     rlt::init_weights(device, actor, rng);
 
     // --- load pre-trained teacher policies ---
-    const std::string pre_training_experiment  = "2026-04-01_19-07-55";
+    const std::string pre_training_experiment  = "2026-04-07_09-00-34";
     const std::string pre_training_name        = "payload-policy-pre-training";
     const std::string dynamics_parameters_path = "./src/payload_policy/dynamics_parameters/";
 
