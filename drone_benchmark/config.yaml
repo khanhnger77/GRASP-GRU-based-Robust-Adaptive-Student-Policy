@@ -1,0 +1,160 @@
+mavlink:
+  connection_string: "udp:localhost:14550"
+  heartbeat_timeout: 10       # seconds to wait for heartbeat
+  command_timeout: 5          # seconds to wait for command ack
+  setpoint_rate_hz: 50        # setpoint publishing frequency
+
+flight:
+  takeoff_altitude: 1.5       # meters (NED: negative = up, but we use positive convention here)
+  arm_delay: 2.0              # seconds after arming before offboard
+  offboard_init_delay: 1.0    # seconds to pre-send setpoints before switching mode
+  spawn_yaw_deg: 90.0         # drone's initial yaw at SITL spawn (degrees). Measured: ~89°.
+  settle_delay: 30.0          # max seconds to wait for stable hover before logging
+  stable_threshold: 0.15      # position error (m) — relaxed for payload (pendulum widens band)
+  stable_hold: 2.0            # seconds drone must stay within threshold before logging starts
+
+  # ── Payload RL transition parameters ─────────────────────────────────
+  # Used by PayloadHoverTest and PayloadDropTest (ignored for PID / baseline tests).
+  # Smooth RL activation avoids the jerk caused by:
+  #   1. PID running at ~134 % hover thrust (0.5 kg payload ≈ 26 % of drone mass)
+  #   2. RL previous_action initialised to neutral → sudden thrust discontinuity
+  #   3. Pendulum swinging at switch time → oscillating angular velocity observation
+  rl_transition_alt: 2.5      # (m AGL) activate RL here — higher altitude gives more recovery room
+  rl_warmup_secs: 3.0         # sleep after "overwrite on" — GRU adapts from reset: 500 Hz × 3 s = 1500 cycles
+  rl_jerk_warn_m: 0.30        # log WARNING if 3D error exceeds this after activation
+  rl_jerk_abort_m: 0.80       # abort and safe-land if error exceeds this (wider at 2.5 m)
+  rl_jerk_warn_xy_m: 0.50     # windy mode: horizontal drift warning threshold
+  rl_jerk_abort_xy_m: 0.90    # windy mode: horizontal drift abort threshold
+  rl_jerk_warn_down_m: 0.25   # downward drop warning threshold (NED down)
+  rl_jerk_abort_down_m: 0.45  # downward drop abort threshold (NED down)
+  rl_monitor_secs: 3.0        # seconds to actively watch for jerk after activation
+  rl_require_preconditions: false # windy conditions: don't block RL switch on strict settle checks
+
+tests:
+  hover:
+    target: [0.0, 0.0, -1.5]  # NED frame
+    duration: 30.0
+    settle_threshold: 0.05    # meters
+
+  step_response:
+    start: [0.0, 0.0, -2.5]
+    end: [2.0, 2.0, -2.5]
+    duration: 20.0
+    settle_threshold: 0.1
+
+  figure8:
+    center: [0.0, 0.0, -1.5]
+    scale_x: 2.0
+    scale_y: 1.0
+    speed: medium             # slow | medium | fast
+    duration: 60.0
+    speeds:
+      slow: 0.3
+      medium: 0.6
+      fast: 1.0
+
+  disturbance:
+    base_position: [0.0, 0.0, -1.5]
+    disturbance_offset: [1.0, 0.0, 0.0]
+    hold_before: 10.0
+    hold_after: 15.0
+
+  # ── Payload tests (gz_x500_payload_drop model) ────────────────────────
+  #
+  # Both tests assume the drone was launched WITH the payload attached:
+  #   make px4_sitl gz_x500_payload_drop \
+  #       EXTERNAL_MODULES_LOCATION="$(cd .. && cd external_modules && pwd)" \
+  #       RL_TOOLS_ROOT="$(cd ../../../ && pwd)" -j8
+  #
+  # Payload drop command:
+  #   gz topic -t /payload/detach -m gz.msgs.Empty -p "unused: true"
+
+  wind_gust:
+    # Hover → sudden gust → recover → gust off
+    target: [0.0, 0.0, -1.5]   # NED hover position
+    gz_world: "default"         # Gazebo world name (gz topic /world/<name>/wind)
+    wind_x: 5.0                 # gust velocity m/s (X axis = forward)
+    wind_y: 0.0                 # gust velocity m/s (Y axis = left)
+    pre_gust_hold: 10.0         # seconds of baseline hover before gust
+    gust_duration: 15.0         # seconds gust is applied
+    post_gust_hold: 15.0        # seconds after gust removed
+    settle_threshold: 0.10      # meters — recovery metric threshold
+
+  payload_crosswind:
+    # Fly A→B→A with payload under constant crosswind
+    gz_world: "default"
+    wind_x: 0.0                 # crosswind: Y axis (perpendicular to A→B path)
+    wind_y: 4.0                 # 4 m/s lateral wind
+    waypoint_b: [10.0, 0.0, -2.5]  # NED — 10m forward from origin
+    leg_duration: 20.0          # seconds to fly each leg
+    hold_b: 5.0                 # seconds hovering at B before return
+    wind_settle: 2.0            # seconds to apply wind before starting leg
+
+  waypoint_drop:
+    # Fly A→B (with payload) → drop → recover → B→C
+    drop_point:   [10.0, 0.0, -2.5]   # NED — where payload is released
+    return_point: [0.0,  0.0, -2.5]   # NED — destination after drop
+    leg_duration: 20.0          # seconds per leg (A→B and B→C)
+    hold_b: 8.0                 # seconds hovering at B before drop (pendulum settle)
+    recover_hold: 10.0          # seconds at B after drop (measure recovery)
+    settle_threshold: 0.10      # meters — recovery metric threshold
+
+  payload_drop:
+    # Drone hovers with payload → drops payload mid-flight → measures recovery.
+    # Phase 1 (0 … hold_before):       hover at drop_position WITH payload
+    # Phase 2 (hold_before):           gz topic drop command is sent
+    # Phase 3 (hold_before … end):     drone continues to hold same setpoint,
+    #                                  post-drop oscillation is logged
+    drop_position: [0.0, 0.0, -2.5]   # NED position when payload is released
+    hold_before: 15.0                  # seconds to stabilise BEFORE dropping
+    hold_after:  20.0                  # seconds to measure AFTER dropping
+    settle_threshold: 0.10             # position threshold for settling-time metric
+
+controllers:
+  pid:
+    # ── PX4 gz_x500 position controller parameters (from x500.params) ────
+    # NOTE: In benchmark mode the drone is commanded via OFFBOARD position
+    # setpoints and PX4's own multi-loop controller executes them.  These
+    # values are here for reference / simulation fidelity only — they are NOT
+    # injected into PX4 at runtime (PX4 already has them loaded from x500.params).
+    #
+    # Position loop (outer)
+    #   MPC_XY_P   = 0.95   horizontal position → velocity setpoint
+    #   MPC_Z_P    = 1.00   vertical position   → velocity setpoint
+    #
+    # Velocity loop (middle)  [units: acceleration m/s²]
+    #   MPC_XY_VEL_P_ACC = 1.80,  MPC_XY_VEL_I_ACC = 0.40,  MPC_XY_VEL_D_ACC = 0.20
+    #   MPC_Z_VEL_P_ACC  = 4.00,  MPC_Z_VEL_I_ACC  = 2.00,  MPC_Z_VEL_D_ACC  = 0.00
+    #
+    # Attitude loop (inner)
+    #   MC_ROLL_P  = 6.5,  MC_PITCH_P = 6.5,  MC_YAW_P = 2.8
+    #
+    # Rate loop (innermost)
+    #   MC_ROLLRATE_P  = 0.14,  MC_ROLLRATE_I  = 0.30,  MC_ROLLRATE_D  = 0.004
+    #   MC_PITCHRATE_P = 0.14,  MC_PITCHRATE_I = 0.30,  MC_PITCHRATE_D = 0.004
+    #   MC_YAWRATE_P   = 0.20,  MC_YAWRATE_I   = 0.10,  MC_YAWRATE_D   = 0.000
+    #
+    # Velocity limits
+    #   MPC_XY_VEL_MAX = 12.0 m/s,  MPC_Z_VEL_MAX_UP = 3.0 m/s,  MPC_Z_VEL_MAX_DN = 1.5 m/s
+    position_p:   [0.95, 0.95, 1.00]   # MPC_XY_P, MPC_XY_P, MPC_Z_P
+    velocity_p:   [1.80, 1.80, 4.00]   # MPC_XY_VEL_P_ACC, MPC_Z_VEL_P_ACC
+    velocity_i:   [0.40, 0.40, 2.00]   # MPC_XY_VEL_I_ACC, MPC_Z_VEL_I_ACC
+    velocity_d:   [0.20, 0.20, 0.00]   # MPC_XY_VEL_D_ACC, MPC_Z_VEL_D_ACC
+    max_vel_xy:   12.0                  # MPC_XY_VEL_MAX
+    max_vel_up:   3.0                   # MPC_Z_VEL_MAX_UP
+    max_vel_dn:   1.5                   # MPC_Z_VEL_MAX_DN
+
+  rl:
+    # The RL policy runs inside PX4 (rl_tools_policy module, 500 Hz).
+    # Activated via: rl_tools_commander overwrite on  (MAVLink shell)
+    # No model file is loaded by Python.
+
+logging:
+  output_dir: "logs"
+  csv_flush_interval: 10      # flush every N rows
+
+plotting:
+  show: false
+  save: true
+  output_dir: "plots"
+  dpi: 150

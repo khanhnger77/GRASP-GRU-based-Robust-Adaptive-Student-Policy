@@ -1,0 +1,64 @@
+diff --git a/worlds/lawn.sdf b/worlds/lawn.sdf
+index f8530bc..ec145e3 100644
+--- a/worlds/lawn.sdf
++++ b/worlds/lawn.sdf
+@@ -157,6 +157,59 @@
+     <gravity>0 0 -9.8</gravity>
+     <magnetic_field>6e-06 2.3e-05 -4.2e-05</magnetic_field>
+     <atmosphere type="adiabatic"/>
++    <!--
++      Sinusoidal wind + gust presets for robustness testing.
++      Active profile below: EXTREME_PERIODIC_GUST
++      LOW_GUST:    base=6 0 0,  amp%=0.08, period=40, dir_amp=4,  dir_period=28,
++                   mag_noise=0.10, dir_noise=0.05, vert_noise=0.05
++      MEDIUM_GUST: base=10 0 0, amp%=0.18, period=22, dir_amp=12, dir_period=12,
++                   mag_noise=0.35, dir_noise=0.12, vert_noise=0.12
++      PERIODIC_GUST: base=8 0 0, amp%=0.45, period=8, dir_amp=28, dir_period=6,
++                     mag_noise=0.03, dir_noise=0.02, vert_noise=0.03
++      EXTREME_PERIODIC_GUST: base=12 0 0, amp%=0.70, period=5, dir_amp=45, dir_period=4,
++                             mag_noise=0.06, dir_noise=0.05, vert_noise=0.08
++      HIGH_GUST:   base=14 0 0, amp%=0.35, period=10, dir_amp=25, dir_period=6,
++                   mag_noise=0.80, dir_noise=0.30, vert_noise=0.35
++    -->
++    <wind>
++      <linear_velocity>12 0 0</linear_velocity>
++    </wind>
++
++    <plugin
++      filename="gz-sim-wind-effects-system"
++      name="gz::sim::systems::WindEffects">
++      <force_approximation_scaling_factor>1</force_approximation_scaling_factor>
++      <horizontal>
++        <magnitude>
++          <time_for_rise>2</time_for_rise>
++          <sin>
++            <amplitude_percent>0.70</amplitude_percent>
++            <period>5</period>
++          </sin>
++          <noise type="gaussian">
++            <mean>0</mean>
++            <stddev>0.06</stddev>
++          </noise>
++        </magnitude>
++        <direction>
++          <time_for_rise>2</time_for_rise>
++          <sin>
++            <amplitude>45</amplitude>
++            <period>4</period>
++          </sin>
++          <noise type="gaussian">
++            <mean>0</mean>
++            <stddev>0.05</stddev>
++          </noise>
++        </direction>
++      </horizontal>
++      <vertical>
++        <noise type="gaussian">
++          <mean>0</mean>
++          <stddev>0.08</stddev>
++        </noise>
++      </vertical>
++    </plugin>
+     <scene>
+       <sky>
+         <clouds>

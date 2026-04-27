@@ -1,0 +1,395 @@
+diff --git a/worlds/lawn.sdf b/worlds/lawn.sdf
+index ec145e3..a90f34d 100644
+--- a/worlds/lawn.sdf
++++ b/worlds/lawn.sdf
+@@ -157,6 +157,390 @@
+     <gravity>0 0 -9.8</gravity>
+     <magnetic_field>6e-06 2.3e-05 -4.2e-05</magnetic_field>
+     <atmosphere type="adiabatic"/>
++    <!-- Visual wind streamer: clearer wind shape / gust direction in Gazebo -->
++    <model name="wind_streamer">
++      <pose>-2 -2 -1 0 0 0</pose>
++      <static>false</static>
++      <self_collide>false</self_collide>
++      <link name="mast">
++        <pose>0 0 1.6 0 0 0</pose>
++        <collision name="collision">
++          <geometry>
++            <cylinder>
++              <radius>0.02</radius>
++              <length>1.8</length>
++            </cylinder>
++          </geometry>
++        </collision>
++        <visual name="visual">
++          <geometry>
++            <cylinder>
++              <radius>0.02</radius>
++              <length>1.8</length>
++            </cylinder>
++          </geometry>
++          <material>
++            <ambient>0.7 0.7 0.7 1.0</ambient>
++            <diffuse>0.7 0.7 0.7 1.0</diffuse>
++            <specular>0.1 0.1 0.1 1.0</specular>
++          </material>
++        </visual>
++        <sensor name="air_speed" type="air_speed">
++          <always_on>1</always_on>
++          <update_rate>20</update_rate>
++          <visualize>false</visualize>
++          <topic>/world/lawn/wind_speed</topic>
++          <air_speed>
++            <pressure>
++              <noise type="gaussian">
++                <mean>0.0</mean>
++                <stddev>0.02</stddev>
++              </noise>
++            </pressure>
++          </air_speed>
++        </sensor>
++      </link>
++      <joint name="mast_joint" type="fixed">
++        <parent>world</parent>
++        <child>mast</child>
++      </joint>
++
++      <link name="streamer_1">
++        <pose>0 0 2.48 0 0 0</pose>
++        <enable_wind>true</enable_wind>
++        <inertial>
++          <mass>0.008</mass>
++          <inertia>
++            <ixx>0.000003</ixx>
++            <ixy>0</ixy>
++            <ixz>0</ixz>
++            <iyy>0.00003</iyy>
++            <iyz>0</iyz>
++            <izz>0.00003</izz>
++          </inertia>
++        </inertial>
++        <velocity_decay>
++          <linear>0.02</linear>
++          <angular>0.12</angular>
++        </velocity_decay>
++        <collision name="collision">
++          <geometry>
++            <box>
++              <size>0.12 0.025 0.015</size>
++            </box>
++          </geometry>
++        </collision>
++        <visual name="visual">
++          <geometry>
++            <box>
++              <size>0.12 0.025 0.015</size>
++            </box>
++          </geometry>
++          <material>
++            <ambient>0.95 0.15 0.15 1.0</ambient>
++            <diffuse>0.95 0.15 0.15 1.0</diffuse>
++          </material>
++        </visual>
++      </link>
++      <joint name="streamer_1_joint" type="ball">
++        <parent>mast</parent>
++        <child>streamer_1</child>
++      </joint>
++
++      <link name="streamer_2">
++        <pose>0.13 0 2.48 0 0 0</pose>
++        <enable_wind>true</enable_wind>
++        <inertial>
++          <mass>0.007</mass>
++          <inertia>
++            <ixx>0.000003</ixx>
++            <ixy>0</ixy>
++            <ixz>0</ixz>
++            <iyy>0.000028</iyy>
++            <iyz>0</iyz>
++            <izz>0.000028</izz>
++          </inertia>
++        </inertial>
++        <velocity_decay>
++          <linear>0.02</linear>
++          <angular>0.10</angular>
++        </velocity_decay>
++        <collision name="collision">
++          <geometry>
++            <box>
++              <size>0.12 0.025 0.015</size>
++            </box>
++          </geometry>
++        </collision>
++        <visual name="visual">
++          <geometry>
++            <box>
++              <size>0.12 0.025 0.015</size>
++            </box>
++          </geometry>
++          <material>
++            <ambient>1.0 0.65 0.1 1.0</ambient>
++            <diffuse>1.0 0.65 0.1 1.0</diffuse>
++          </material>
++        </visual>
++      </link>
++      <joint name="streamer_2_joint" type="ball">
++        <parent>streamer_1</parent>
++        <child>streamer_2</child>
++      </joint>
++
++      <link name="streamer_3">
++        <pose>0.26 0 2.48 0 0 0</pose>
++        <enable_wind>true</enable_wind>
++        <inertial>
++          <mass>0.006</mass>
++          <inertia>
++            <ixx>0.000002</ixx>
++            <ixy>0</ixy>
++            <ixz>0</ixz>
++            <iyy>0.000024</iyy>
++            <iyz>0</iyz>
++            <izz>0.000024</izz>
++          </inertia>
++        </inertial>
++        <velocity_decay>
++          <linear>0.02</linear>
++          <angular>0.09</angular>
++        </velocity_decay>
++        <collision name="collision">
++          <geometry>
++            <box>
++              <size>0.12 0.025 0.015</size>
++            </box>
++          </geometry>
++        </collision>
++        <visual name="visual">
++          <geometry>
++            <box>
++              <size>0.12 0.025 0.015</size>
++            </box>
++          </geometry>
++          <material>
++            <ambient>1.0 0.95 0.1 1.0</ambient>
++            <diffuse>1.0 0.95 0.1 1.0</diffuse>
++          </material>
++        </visual>
++      </link>
++      <joint name="streamer_3_joint" type="ball">
++        <parent>streamer_2</parent>
++        <child>streamer_3</child>
++      </joint>
++
++      <link name="streamer_4">
++        <pose>0.39 0 2.48 0 0 0</pose>
++        <enable_wind>true</enable_wind>
++        <inertial>
++          <mass>0.005</mass>
++          <inertia>
++            <ixx>0.000002</ixx>
++            <ixy>0</ixy>
++            <ixz>0</ixz>
++            <iyy>0.00002</iyy>
++            <iyz>0</iyz>
++            <izz>0.00002</izz>
++          </inertia>
++        </inertial>
++        <velocity_decay>
++          <linear>0.02</linear>
++          <angular>0.08</angular>
++        </velocity_decay>
++        <collision name="collision">
++          <geometry>
++            <box>
++              <size>0.12 0.025 0.015</size>
++            </box>
++          </geometry>
++        </collision>
++        <visual name="visual">
++          <geometry>
++            <box>
++              <size>0.12 0.025 0.015</size>
++            </box>
++          </geometry>
++          <material>
++            <ambient>0.4 0.9 0.2 1.0</ambient>
++            <diffuse>0.4 0.9 0.2 1.0</diffuse>
++          </material>
++        </visual>
++      </link>
++      <joint name="streamer_4_joint" type="ball">
++        <parent>streamer_3</parent>
++        <child>streamer_4</child>
++      </joint>
++
++      <link name="streamer_5">
++        <pose>0.52 0 2.48 0 0 0</pose>
++        <enable_wind>true</enable_wind>
++        <inertial>
++          <mass>0.004</mass>
++          <inertia>
++            <ixx>0.000002</ixx>
++            <ixy>0</ixy>
++            <ixz>0</ixz>
++            <iyy>0.000017</iyy>
++            <iyz>0</iyz>
++            <izz>0.000017</izz>
++          </inertia>
++        </inertial>
++        <velocity_decay>
++          <linear>0.02</linear>
++          <angular>0.08</angular>
++        </velocity_decay>
++        <collision name="collision">
++          <geometry>
++            <box>
++              <size>0.12 0.025 0.015</size>
++            </box>
++          </geometry>
++        </collision>
++        <visual name="visual">
++          <geometry>
++            <box>
++              <size>0.12 0.025 0.015</size>
++            </box>
++          </geometry>
++          <material>
++            <ambient>0.2 0.8 1.0 1.0</ambient>
++            <diffuse>0.2 0.8 1.0 1.0</diffuse>
++          </material>
++        </visual>
++      </link>
++      <joint name="streamer_5_joint" type="ball">
++        <parent>streamer_4</parent>
++        <child>streamer_5</child>
++      </joint>
++
++      <link name="streamer_6">
++        <pose>0.65 0 2.48 0 0 0</pose>
++        <enable_wind>true</enable_wind>
++        <inertial>
++          <mass>0.0035</mass>
++          <inertia>
++            <ixx>0.000001</ixx>
++            <ixy>0</ixy>
++            <ixz>0</ixz>
++            <iyy>0.000014</iyy>
++            <iyz>0</iyz>
++            <izz>0.000014</izz>
++          </inertia>
++        </inertial>
++        <velocity_decay>
++          <linear>0.02</linear>
++          <angular>0.07</angular>
++        </velocity_decay>
++        <collision name="collision">
++          <geometry>
++            <box>
++              <size>0.12 0.025 0.015</size>
++            </box>
++          </geometry>
++        </collision>
++        <visual name="visual">
++          <geometry>
++            <box>
++              <size>0.12 0.025 0.015</size>
++            </box>
++          </geometry>
++          <material>
++            <ambient>0.35 0.55 1.0 1.0</ambient>
++            <diffuse>0.35 0.55 1.0 1.0</diffuse>
++          </material>
++        </visual>
++      </link>
++      <joint name="streamer_6_joint" type="ball">
++        <parent>streamer_5</parent>
++        <child>streamer_6</child>
++      </joint>
++
++      <link name="streamer_7">
++        <pose>0.78 0 2.48 0 0 0</pose>
++        <enable_wind>true</enable_wind>
++        <inertial>
++          <mass>0.003</mass>
++          <inertia>
++            <ixx>0.000001</ixx>
++            <ixy>0</ixy>
++            <ixz>0</ixz>
++            <iyy>0.000012</iyy>
++            <iyz>0</iyz>
++            <izz>0.000012</izz>
++          </inertia>
++        </inertial>
++        <velocity_decay>
++          <linear>0.02</linear>
++          <angular>0.07</angular>
++        </velocity_decay>
++        <collision name="collision">
++          <geometry>
++            <box>
++              <size>0.12 0.025 0.015</size>
++            </box>
++          </geometry>
++        </collision>
++        <visual name="visual">
++          <geometry>
++            <box>
++              <size>0.12 0.025 0.015</size>
++            </box>
++          </geometry>
++          <material>
++            <ambient>0.7 0.4 1.0 1.0</ambient>
++            <diffuse>0.7 0.4 1.0 1.0</diffuse>
++          </material>
++        </visual>
++      </link>
++      <joint name="streamer_7_joint" type="ball">
++        <parent>streamer_6</parent>
++        <child>streamer_7</child>
++      </joint>
++
++      <link name="streamer_8">
++        <pose>0.91 0 2.48 0 0 0</pose>
++        <enable_wind>true</enable_wind>
++        <inertial>
++          <mass>0.0025</mass>
++          <inertia>
++            <ixx>0.000001</ixx>
++            <ixy>0</ixy>
++            <ixz>0</ixz>
++            <iyy>0.00001</iyy>
++            <iyz>0</iyz>
++            <izz>0.00001</izz>
++          </inertia>
++        </inertial>
++        <velocity_decay>
++          <linear>0.02</linear>
++          <angular>0.06</angular>
++        </velocity_decay>
++        <collision name="collision">
++          <geometry>
++            <box>
++              <size>0.12 0.025 0.015</size>
++            </box>
++          </geometry>
++        </collision>
++        <visual name="visual">
++          <geometry>
++            <box>
++              <size>0.12 0.025 0.015</size>
++            </box>
++          </geometry>
++          <material>
++            <ambient>1.0 0.35 0.65 1.0</ambient>
++            <diffuse>1.0 0.35 0.65 1.0</diffuse>
++          </material>
++        </visual>
++      </link>
++      <joint name="streamer_8_joint" type="ball">
++        <parent>streamer_7</parent>
++        <child>streamer_8</child>
++      </joint>
++    </model>
+     <!--
+       Sinusoidal wind + gust presets for robustness testing.
+       Active profile below: EXTREME_PERIODIC_GUST
