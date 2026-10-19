@@ -69,3 +69,15 @@
 /**/*.pth
 /foundation-model-experiments
 /1k-experiments
+# Paper writing / research tooling (kept local, not part of the code release)
+/AutoResearchClaw/
+/paper/
+/paper_draft.zip
+/**/*.docx
+/**/.~lock.*#
+
+# README media
+!/assets/*.png
+
+# Old benchmark renders (too large for GitHub)
+/drone_benchmark/videos_backup/
