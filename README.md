@@ -83,13 +83,26 @@ flowchart LR
 ## 🚀 Getting started
 
 ```bash
-git clone --recurse-submodules https://github.com/khanhnger77/GRASP-GRU-based-Robust-Adaptive-Student-Policy.git
+git clone https://github.com/khanhnger77/GRASP-GRU-based-Robust-Adaptive-Student-Policy.git
 cd GRASP-GRU-based-Robust-Adaptive-Student-Policy
-cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+git checkout payload_ver2
+
+# Only the dependencies the payload training targets need
+git submodule update --init external/highfive external/tensorboard external/json
+
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release \
+      -DRL_TOOLS_ENABLE_TARGETS=ON -DRL_TOOLS_ENABLE_HDF5=ON \
+      -DRL_TOOLS_ENABLE_TENSORBOARD=ON -DRL_TOOLS_ENABLE_JSON=ON
 cmake --build build -j"$(nproc)"
 ```
 
-Already cloned without submodules? Run `git submodule update --init --recursive`.
+For PX4 SITL, also fetch the PX4 integration (large, pulls PX4-Autopilot):
+
+```bash
+git submodule update --init --recursive embedded_platforms/px4
+```
+
+> **Don't use `git clone --recurse-submodules` or `git submodule update --init --recursive` on the whole repo.** Some upstream RLtools submodules (e.g. the Crazyflie controller) include RLtools itself, so a full recursive clone nests forever. Init only the paths you need, as shown above.
 
 **Train → export → fly.** Dynamics parameter generation, teacher pre-training and student post-training live in [`src/payload_policy/`](src/payload_policy/). The PX4 modules that load the exported checkpoint are in [`embedded_platforms/px4/external_modules/`](embedded_platforms/px4/external_modules/).
 
