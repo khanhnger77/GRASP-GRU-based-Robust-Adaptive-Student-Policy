@@ -83,8 +83,8 @@ flowchart LR
 ## 🚀 Getting started
 
 ```bash
-git clone --recurse-submodules https://github.com/khanhngo7879/raptor.git
-cd raptor
+git clone --recurse-submodules https://github.com/khanhnger77/GRASP-GRU-based-Robust-Adaptive-Student-Policy.git
+cd GRASP-GRU-based-Robust-Adaptive-Student-Policy
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build -j"$(nproc)"
 ```
